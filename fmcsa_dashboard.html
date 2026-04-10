@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FMCSA Road Transport Safety Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0e14;--s1:#111620;--s2:#181f2e;--s3:#1e2638;
+  --bd:rgba(255,255,255,0.055);--bd2:rgba(255,255,255,0.11);--bd3:rgba(255,255,255,0.2);
+  --tx:#cdd5e0;--mu:#5a6a85;--mu2:#7a8fa8;
+  --acc:#e87c3a;--acc0:rgba(232,124,58,0.12);--accb:rgba(232,124,58,0.3);
+  --red:#e05555;--red0:rgba(224,85,85,0.12);--redb:rgba(224,85,85,0.3);
+  --blu:#3d8ef0;--blu0:rgba(61,142,240,0.12);--blub:rgba(61,142,240,0.3);
+  --grn:#3db87a;--grn0:rgba(61,184,122,0.12);--grnb:rgba(61,184,122,0.3);
+  --am:#d4a017;--am0:rgba(212,160,23,0.12);--amb:rgba(212,160,23,0.3);
+  --r:8px;--rl:12px;
+  --font:'IBM Plex Sans',sans-serif;--mono:'IBM Plex Mono',monospace;
+}
+body{font-family:var(--font);background:var(--bg);color:var(--tx);min-height:100vh;font-size:14px}
+
+/* topbar */
+.topbar{background:var(--s1);border-bottom:1px solid var(--bd);padding:0 32px;height:56px;
+  display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200}
+.brand{display:flex;align-items:center;gap:12px}
+.brand-icon{width:30px;height:30px;background:var(--acc);border-radius:6px;display:flex;align-items:center;justify-content:center}
+.brand-icon svg{width:16px;height:16px}
+.brand-name{font-size:14px;font-weight:500;letter-spacing:-0.01em}
+.brand-sub{font-size:11px;color:var(--mu);margin-top:1px}
+.topbar-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.live-pill{display:flex;align-items:center;gap:6px;font-size:11px;font-family:var(--mono);
+  background:var(--grn0);color:var(--grn);border:1px solid var(--grnb);padding:3px 10px;border-radius:999px}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--grn);animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+.src-pill{font-size:11px;font-family:var(--mono);background:var(--acc0);color:var(--acc);border:1px solid var(--accb);padding:3px 10px;border-radius:999px}
+.ts{font-size:11px;color:var(--mu);font-family:var(--mono)}
+
+/* tab nav */
+.tabnav{background:var(--s1);border-bottom:1px solid var(--bd);padding:0 32px;display:flex;gap:0;overflow-x:auto}
+.tablink{font-family:var(--font);font-size:13px;font-weight:400;color:var(--mu);padding:13px 20px;
+  border:none;border-bottom:2px solid transparent;background:transparent;cursor:pointer;white-space:nowrap;transition:all 0.15s}
+.tablink:hover{color:var(--tx)}
+.tablink.active{color:var(--tx);border-bottom-color:var(--acc);font-weight:500}
+.tablink .tab-status{font-size:10px;font-family:var(--mono);margin-left:6px;opacity:0.6}
+.tablink.loading .tab-status{color:var(--am)}
+.tablink.ready .tab-status{color:var(--grn)}
+
+/* loader */
+.loader{position:fixed;inset:0;background:var(--bg);z-index:999;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;transition:opacity 0.5s}
+.loader.out{opacity:0;pointer-events:none}
+.spin{width:40px;height:40px;border:2.5px solid var(--bd2);border-top-color:var(--acc);border-radius:50%;animation:rot 0.75s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+.load-title{font-size:13px;font-family:var(--mono);color:var(--mu2)}
+.load-progress{width:360px}
+.load-bar-bg{height:3px;background:var(--bd2);border-radius:2px;overflow:hidden;margin-bottom:10px}
+.load-bar-fill{height:100%;background:var(--acc);border-radius:2px;width:0%;transition:width 0.3s}
+.load-steps{display:flex;flex-direction:column;gap:4px;max-height:260px;overflow:auto}
+.st{font-size:11px;font-family:var(--mono);color:var(--mu);display:flex;align-items:center;gap:8px}
+.st.done{color:var(--grn)}.st.go{color:var(--acc)}.st.err{color:var(--red)}
+.st-ic{width:14px;text-align:center;flex-shrink:0}
+
+.errbox{background:var(--red0);border:1px solid var(--redb);border-radius:var(--r);
+  padding:14px 18px;margin:20px 32px;font-size:13px;display:none;gap:10px;align-items:flex-start}
+.errbox.on{display:flex}
+
+.main{padding:24px 32px;max-width:1500px}
+.tabpanel{display:none}.tabpanel.active{display:block}
+
+/* token bar */
+.tbar{background:var(--s1);border:1px solid var(--accb);border-radius:var(--r);
+  padding:12px 16px;margin-bottom:20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.tbar label{font-size:12px;color:var(--mu2)}
+.tinput{font-family:var(--mono);font-size:12px;background:var(--s2);color:var(--tx);
+  border:1px solid var(--bd2);border-radius:6px;padding:5px 10px;width:260px}
+.tbtn{font-family:var(--font);font-size:12px;font-weight:500;padding:5px 14px;
+  border-radius:6px;border:1px solid var(--blub);background:var(--blu0);color:var(--blu);cursor:pointer}
+.tnote{font-size:11px;color:var(--mu)}
+
+/* section divider */
+.sec{display:flex;align-items:center;gap:10px;margin-bottom:16px;margin-top:28px}
+.sec:first-of-type{margin-top:0}
+.sec-line{flex:1;height:1px;background:var(--bd)}
+.sec-label{font-size:11px;font-family:var(--mono);color:var(--mu);letter-spacing:0.08em;text-transform:uppercase;white-space:nowrap}
+
+/* KPIs */
+.krow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:24px}
+.krow4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:24px}
+.kpi{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r);padding:16px 18px}
+.klbl{font-size:10px;color:var(--mu);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:8px}
+.kval{font-size:26px;font-weight:300;letter-spacing:-0.03em;line-height:1}
+.ksub{font-size:11px;font-family:var(--mono);color:var(--mu);margin-top:6px}
+
+/* grids */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
+.g31{display:grid;grid-template-columns:3fr 2fr;gap:14px;margin-bottom:16px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:16px}
+.mb16{margin-bottom:16px}
+
+/* cards */
+.card{background:var(--s1);border:1px solid var(--bd);border-radius:var(--rl);padding:18px 20px}
+.ct{font-size:13px;font-weight:500;color:var(--tx);margin-bottom:2px}
+.cs{font-size:11px;color:var(--mu);margin-bottom:14px}
+.csrc{font-size:10px;color:var(--mu);margin-top:10px;font-style:italic;border-top:1px solid var(--bd);padding-top:8px}
+.leg{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:10px}
+.legitem{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--mu2)}
+.legsq{width:8px;height:8px;border-radius:2px}
+
+/* map */
+#map{width:100%;display:block}
+.mlegrow{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:10px;color:var(--mu)}
+.mlegbar{display:flex;height:4px;flex:1;max-width:160px;border-radius:2px;overflow:hidden}
+
+/* tooltip */
+.tt{position:fixed;background:var(--s3);border:1px solid var(--bd2);border-radius:var(--r);
+  padding:11px 14px;font-size:11px;pointer-events:none;display:none;z-index:999;min-width:170px}
+.tt strong{display:block;font-size:12px;color:var(--tx);margin-bottom:6px}
+.ttr{display:flex;justify-content:space-between;gap:14px;margin-top:3px;color:var(--mu)}
+.ttr span:last-child{color:var(--tx);font-family:var(--mono)}
+
+/* bar rows */
+.brow{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.blbl{font-size:11px;color:var(--mu2);min-width:160px}
+.bbg{flex:1;height:5px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden}
+.bfill{height:100%;border-radius:3px;transition:width .5s ease}
+.bpct{font-size:11px;font-family:var(--mono);color:var(--mu);min-width:52px;text-align:right}
+
+/* table */
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th{font-size:10px;font-weight:500;color:var(--mu);text-align:left;padding:6px 10px;
+  border-bottom:1px solid var(--bd);letter-spacing:0.05em;text-transform:uppercase}
+.tbl td{padding:8px 10px;border-bottom:1px solid var(--bd);vertical-align:middle}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tbody tr:hover td{background:rgba(255,255,255,0.015)}
+.pill{display:inline-block;font-size:10px;padding:2px 7px;border-radius:4px;font-family:var(--mono);font-weight:500}
+.p-haz{background:var(--red0);color:var(--red);border:1px solid var(--redb)}
+.p-st{background:var(--blu0);color:var(--blu);border:1px solid var(--blub)}
+.p-tr{background:var(--acc0);color:var(--acc);border:1px solid var(--accb)}
+.p-bus{background:var(--grn0);color:var(--grn);border:1px solid var(--grnb)}
+.p-sat{background:var(--grn0);color:var(--grn);border:1px solid var(--grnb)}
+.p-cond{background:var(--am0);color:var(--am);border:1px solid var(--amb)}
+.p-unsat{background:var(--red0);color:var(--red);border:1px solid var(--redb)}
+.p-nr{background:rgba(255,255,255,0.06);color:var(--mu);border:1px solid var(--bd2)}
+
+.footer{margin-top:32px;padding:16px 32px;border-top:1px solid var(--bd);font-size:10px;color:var(--mu);display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px}
+
+@media(max-width:1000px){.krow,.krow4{grid-template-columns:repeat(2,1fr)}.g2,.g31,.g3{grid-template-columns:1fr}}
+@media(max-width:600px){.main,.topbar,.tabnav{padding-left:16px;padding-right:16px}}
+
+.chart-wrap{position:relative}
+canvas{position:relative;z-index:1}
+.sonar-footer-brand {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: rgba(255,255,255,0.25);
+}
+
+</style>
+</head>
+<body>
+
+<div class="loader" id="ldr">
+  <div class="spin"></div>
+  <div class="load-title" id="lmsg">Connecting to FMCSA APIs...</div>
+  <div class="load-progress">
+    <div class="load-bar-bg"><div class="load-bar-fill" id="lbar"></div></div>
+    <div class="load-steps" id="lsteps"></div>
+  </div>
+</div>
+
+<div class="errbox" id="errbox">
+  <span style="font-size:16px;flex-shrink:0">⚠</span>
+  <div>
+    <strong id="errtitle">API error</strong><br>
+    <span id="errmsg" style="color:var(--mu);font-size:12px"></span><br>
+    <span style="font-size:11px;color:var(--mu)">Serve via: <code style="color:var(--acc)">python3 -m http.server 8080</code> → open <code style="color:var(--acc)">http://localhost:8080/fmcsa_dashboard.html</code></span>
+  </div>
+</div>
+
+<div class="topbar">
+  <div class="brand">
+    <div style="width:88px;line-height:0;flex-shrink:0;border-right:1px solid rgba(255,255,255,0.1);padding-right:16px;margin-right:6px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4465.5 788.8" style="width:100%;height:auto" fill="white"> <path d="M652.4,377c-14.1-8.5-33-14.7-56.6-18.4-23.6-3.7-58.7-5.6-105.4-5.6h-214c-66.1,0-109.7-7.2-130.6-21.6-21-14.4-31.4-40.8-31.4-79.2s10.7-63.9,32.2-78c21.5-14.1,63.1-21.2,125-21.2h203.2c60.8,0,100.6,6.9,119.4,20.6,18.8,13.7,28.2,40.2,28.2,79.4v9.2h71.2v-17.2c0-28.8-3.3-52.7-9.8-71.8-6.5-19.1-16.6-34.5-30.2-46.2-16.8-13.9-40-23.6-69.6-29.2-29.6-5.6-81.3-8.4-155.2-8.4h-135.2c-97.6,0-164.7,12.3-201.4,37-36.7,24.7-55,67.7-55,129s16.1,102.3,48.2,127c32.1,24.7,87.9,37,167.4,37h251.6c53.1,0,88.1,7,105.2,21,17.1,14,25.6,39.8,25.6,77.4s-12.3,75.6-36.8,91.6c-24.5,16-77.2,24-158,24h-155.6c-67.2,0-113.1-7.3-137.6-22-24.5-14.7-36.8-40.7-36.8-78s.3-12.1.8-23.6c.3-4.8.5-8.7.8-11.6H40.8c-.3,1.6-.4,3.9-.4,6.8-.8,17.9-1.2,30.5-1.2,38,0,56,17,96.1,51,120.2,34,24.1,91,36.2,171,36.2h202c92.8,0,157-13.1,192.6-39.2,35.6-26.1,53.4-72.3,53.4-138.4s-4.3-72.8-13-94.4c-8.7-21.6-23.3-38.4-43.8-50.4Z"/> <path d="M1593.5,131c-18.9-14.9-44-25.6-75-32-31.1-6.4-78-9.6-140.7-9.6h-198.9c-62.7,0-109.6,3.2-140.7,9.6-31.1,6.4-56.1,17.1-75,32-21.1,16.8-36.3,39.9-45.6,69.2-9.3,29.3-14,68.8-14,118.4v162.4c0,45.3,4.7,81.9,14.2,109.6,9.5,27.7,24.9,50.1,46.2,67.2,19.2,15.2,44,25.9,74.4,32.2,30.4,6.3,77.5,9.4,141.3,9.4h198.1c64.3,0,111.6-3.1,141.9-9.4,30.3-6.3,54.9-17,73.8-32.2,20.5-16.3,35.6-38.8,45.2-67.6,9.6-28.8,14.4-66.4,14.4-112.8v-166c0-46.1-4.8-83.7-14.4-112.6-9.6-28.9-24.7-51.5-45.2-67.8ZM1573.1,460.2v20c0,31.2-1.7,54.2-5.2,69-3.5,14.8-9.2,27.5-17.2,38.2-11.8,15.5-28,26.5-48.8,33.2-20.8,6.7-50.4,10-88.9,10h-269.4c-38.4,0-68-3.3-88.9-10-20.8-6.7-37.1-17.7-48.8-33.2-8.5-11.2-14.5-24.5-18-39.8-3.5-15.3-5.2-40.9-5.2-76.6v-156.4c0-35.7,1.7-61.3,5.2-76.6,3.5-15.3,9.5-28.6,18-39.8,11.7-15.5,28-26.5,48.8-33.2,20.8-6.7,50.4-10,88.9-10h269.4c38.4,0,68,3.3,88.9,10,20.8,6.7,37.1,17.7,48.8,33.2,8,10.7,13.7,23.3,17.2,38,3.5,14.7,5.2,37.7,5.2,69.2v154.8Z"/> <polygon points="2522.3 624.2 1983.9 96.6 1867.5 96.6 1867.5 692.2 1941.5 692.2 1941.5 156.6 2487.9 692.2 2595.9 692.2 2595.9 96.6 2522.3 96.6 2522.3 624.2"/> <path d="M4428.3,309.8v-71.6c0-54.1-15.4-91.3-46.2-111.4-30.8-20.1-93.5-30.2-188.2-30.2h-425.2v64.8h449.2c53.3,0,88.7,6.7,106.2,20,17.5,13.3,26.2,40,26.2,80v28.4c0,40.3-8.7,67-26.2,80.2-17.5,13.2-52.9,19.8-106.2,19.8h-449.2v302.4h74v-233.6h361.2c62.1,0,101.7,7.1,118.6,21.2,16.9,14.1,25.4,40.7,25.4,79.6v132.8h74v-147.6c0-34.7-8.3-61.8-24.8-81.4-16.5-19.6-41.1-31.1-73.6-34.6,39.2-8.3,66.5-20.9,81.8-38,15.3-17.1,23-44,23-80.8Z"/> <polygon points="3231.1 96.6 3132.7 96.6 2787.1 692.2 2871.5 692.2 2983.6 498.2 2983.5 498.2 3182.7 155.8 3385.1 498.2 3384.9 498.2 3499.1 692.2 3577.5 692.2 3231.1 96.6"/> </svg></div>
+      <div style="font-size:9px;color:rgba(255,255,255,0.35);letter-spacing:0.12em;text-transform:uppercase;font-family:monospace">by FreightWaves</div>
+    </div>
+    <div>
+      <div class="brand-name" style="font-size:13px;font-weight:500;color:var(--tx)">FMCSA Road Transport Safety</div>
+      <div class="brand-sub">Crashes · Carriers · Inspections — Live SODA API · data.transportation.gov</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span class="live-pill"><span class="live-dot"></span>Live data</span>
+    <span class="src-pill">3 datasets</span>
+    <span class="ts" id="ts">—</span>
+  </div>
+</div>
+
+<div class="tabnav">
+  <button class="tablink active" id="tab-crashes-btn" onclick="switchTab('crashes',this)">Crashes <span class="tab-status" id="tab-crashes-status"></span></button>
+  <button class="tablink" id="tab-census-btn" onclick="switchTab('census',this)">Carriers &amp; Census <span class="tab-status" id="tab-census-status"></span></button>
+  <button class="tablink" id="tab-inspect-btn" onclick="switchTab('inspect',this)">Inspections <span class="tab-status" id="tab-inspect-status"></span></button>
+</div>
+
+<div class="main" id="main" style="display:none">
+
+  <div class="tbar">
+    <span style="color:var(--acc)">🔑</span>
+    <label>SODA App Token (recommended):</label>
+    <input class="tinput" id="tok" placeholder="Paste from data.transportation.gov → Sign In → Developer Settings">
+    <button class="tbtn" onclick="reload()">↻ Reload all</button>
+    <span class="tnote">Free token at <a href="https://data.transportation.gov" target="_blank" style="color:var(--blu)">data.transportation.gov</a></span>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       TAB: CRASHES (aayw-vxb3)
+  ══════════════════════════════════════════════ -->
+  <div class="tabpanel active" id="tab-crashes">
+    <div class="sec"><div class="sec-line"></div><div class="sec-label">Overview — all CMV crashes</div><div class="sec-line"></div></div>
+    <div class="krow">
+      <div class="kpi"><div class="klbl">Total CMV crashes</div><div class="kval" id="kTot">—</div><div class="ksub">federal recordable</div></div>
+      <div class="kpi"><div class="klbl">Fatal crashes</div><div class="kval" style="color:var(--red)" id="kFat">—</div><div class="ksub" id="kFatSub">—</div></div>
+      <div class="kpi"><div class="klbl">Injury crashes</div><div class="kval" style="color:var(--am)" id="kInj">—</div><div class="ksub" id="kInjSub">—</div></div>
+      <div class="kpi"><div class="klbl">Hazmat releases</div><div class="kval" style="color:var(--red)" id="kHaz">—</div><div class="ksub" id="kHazSub">—</div></div>
+      <div class="kpi"><div class="klbl">Tow-aways</div><div class="kval" id="kTow">—</div><div class="ksub">vehicle towed</div></div>
+    </div>
+    <div class="g31">
+      <div class="card">
+        <div class="ct">Annual crash trend — fatal &amp; hazmat</div>
+        <div class="cs">Federal recordable CMV crashes · 2005–present · one API call per year</div>
+        <div class="leg">
+          <div class="legitem"><div class="legsq" style="background:rgba(232,124,58,0.45)"></div>Total crashes</div>
+          <div class="legitem"><div class="legsq" style="background:var(--red)"></div>Fatal crashes</div>
+          <div class="legitem"><div class="legsq" style="background:var(--grn)"></div>Hazmat releases</div>
+        </div>
+        <div class="chart-wrap" style="position:relative;height:240px"><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:55%;opacity:0.04;pointer-events:none;user-select:none;z-index:0"><svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 4465.5 788.8"> <!-- Generator: Adobe Illustrator 29.1.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 142) --> <g> <path d="M652.4,377c-14.1-8.5-33-14.7-56.6-18.4-23.6-3.7-58.7-5.6-105.4-5.6h-214c-66.1,0-109.7-7.2-130.6-21.6-21-14.4-31.4-40.8-31.4-79.2s10.7-63.9,32.2-78c21.5-14.1,63.1-21.2,125-21.2h203.2c60.8,0,100.6,6.9,119.4,20.6,18.8,13.7,28.2,40.2,28.2,79.4v9.2h71.2v-17.2c0-28.8-3.3-52.7-9.8-71.8-6.5-19.1-16.6-34.5-30.2-46.2-16.8-13.9-40-23.6-69.6-29.2-29.6-5.6-81.3-8.4-155.2-8.4h-135.2c-97.6,0-164.7,12.3-201.4,37-36.7,24.7-55,67.7-55,129s16.1,102.3,48.2,127c32.1,24.7,87.9,37,167.4,37h251.6c53.1,0,88.1,7,105.2,21,17.1,14,25.6,39.8,25.6,77.4s-12.3,75.6-36.8,91.6c-24.5,16-77.2,24-158,24h-155.6c-67.2,0-113.1-7.3-137.6-22-24.5-14.7-36.8-40.7-36.8-78s.3-12.1.8-23.6c.3-4.8.5-8.7.8-11.6H40.8c-.3,1.6-.4,3.9-.4,6.8-.8,17.9-1.2,30.5-1.2,38,0,56,17,96.1,51,120.2,34,24.1,91,36.2,171,36.2h202c92.8,0,157-13.1,192.6-39.2,35.6-26.1,53.4-72.3,53.4-138.4s-4.3-72.8-13-94.4c-8.7-21.6-23.3-38.4-43.8-50.4Z"/> <path d="M1593.5,131c-18.9-14.9-44-25.6-75-32-31.1-6.4-78-9.6-140.7-9.6h-198.9c-62.7,0-109.6,3.2-140.7,9.6-31.1,6.4-56.1,17.1-75,32-21.1,16.8-36.3,39.9-45.6,69.2-9.3,29.3-14,68.8-14,118.4v162.4c0,45.3,4.7,81.9,14.2,109.6,9.5,27.7,24.9,50.1,46.2,67.2,19.2,15.2,44,25.9,74.4,32.2,30.4,6.3,77.5,9.4,141.3,9.4h198.1c64.3,0,111.6-3.1,141.9-9.4,30.3-6.3,54.9-17,73.8-32.2,20.5-16.3,35.6-38.8,45.2-67.6,9.6-28.8,14.4-66.4,14.4-112.8v-166c0-46.1-4.8-83.7-14.4-112.6-9.6-28.9-24.7-51.5-45.2-67.8ZM1573.1,460.2v20c0,31.2-1.7,54.2-5.2,69-3.5,14.8-9.2,27.5-17.2,38.2-11.8,15.5-28,26.5-48.8,33.2-20.8,6.7-50.4,10-88.9,10h-269.4c-38.4,0-68-3.3-88.9-10-20.8-6.7-37.1-17.7-48.8-33.2-8.5-11.2-14.5-24.5-18-39.8-3.5-15.3-5.2-40.9-5.2-76.6v-156.4c0-35.7,1.7-61.3,5.2-76.6,3.5-15.3,9.5-28.6,18-39.8,11.7-15.5,28-26.5,48.8-33.2,20.8-6.7,50.4-10,88.9-10h269.4c38.4,0,68,3.3,88.9,10,20.8,6.7,37.1,17.7,48.8,33.2,8,10.7,13.7,23.3,17.2,38,3.5,14.7,5.2,37.7,5.2,69.2v154.8Z"/> <polygon points="2522.3 624.2 1983.9 96.6 1867.5 96.6 1867.5 692.2 1941.5 692.2 1941.5 156.6 2487.9 692.2 2595.9 692.2 2595.9 96.6 2522.3 96.6 2522.3 624.2"/> <path d="M4428.3,309.8v-71.6c0-54.1-15.4-91.3-46.2-111.4-30.8-20.1-93.5-30.2-188.2-30.2h-425.2v64.8h449.2c53.3,0,88.7,6.7,106.2,20,17.5,13.3,26.2,40,26.2,80v28.4c0,40.3-8.7,67-26.2,80.2-17.5,13.2-52.9,19.8-106.2,19.8h-449.2v302.4h74v-233.6h361.2c62.1,0,101.7,7.1,118.6,21.2,16.9,14.1,25.4,40.7,25.4,79.6v132.8h74v-147.6c0-34.7-8.3-61.8-24.8-81.4-16.5-19.6-41.1-31.1-73.6-34.6,39.2-8.3,66.5-20.9,81.8-38,15.3-17.1,23-44,23-80.8Z"/> <polygon points="3231.1 96.6 3132.7 96.6 2787.1 692.2 2871.5 692.2 2983.6 498.2 2983.5 498.2 3182.7 155.8 3385.1 498.2 3384.9 498.2 3499.1 692.2 3577.5 692.2 3231.1 96.6"/> </g> </svg></div><canvas id="cTrend"></canvas></div>
+        <div class="csrc">FMCSA aayw-vxb3 — COUNT(*) WHERE report_date BETWEEN 'YYYY0101' AND 'YYYY1231'</div>
+      </div>
+      <div class="card">
+        <div class="ct">Top 15 states — CMV crashes</div>
+        <div class="cs">All years · GROUP BY state</div>
+        <div class="chart-wrap" style="position:relative;height:290px"><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:55%;opacity:0.04;pointer-events:none;user-select:none;z-index:0"><svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 4465.5 788.8"> <!-- Generator: Adobe Illustrator 29.1.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 142) --> <g> <path d="M652.4,377c-14.1-8.5-33-14.7-56.6-18.4-23.6-3.7-58.7-5.6-105.4-5.6h-214c-66.1,0-109.7-7.2-130.6-21.6-21-14.4-31.4-40.8-31.4-79.2s10.7-63.9,32.2-78c21.5-14.1,63.1-21.2,125-21.2h203.2c60.8,0,100.6,6.9,119.4,20.6,18.8,13.7,28.2,40.2,28.2,79.4v9.2h71.2v-17.2c0-28.8-3.3-52.7-9.8-71.8-6.5-19.1-16.6-34.5-30.2-46.2-16.8-13.9-40-23.6-69.6-29.2-29.6-5.6-81.3-8.4-155.2-8.4h-135.2c-97.6,0-164.7,12.3-201.4,37-36.7,24.7-55,67.7-55,129s16.1,102.3,48.2,127c32.1,24.7,87.9,37,167.4,37h251.6c53.1,0,88.1,7,105.2,21,17.1,14,25.6,39.8,25.6,77.4s-12.3,75.6-36.8,91.6c-24.5,16-77.2,24-158,24h-155.6c-67.2,0-113.1-7.3-137.6-22-24.5-14.7-36.8-40.7-36.8-78s.3-12.1.8-23.6c.3-4.8.5-8.7.8-11.6H40.8c-.3,1.6-.4,3.9-.4,6.8-.8,17.9-1.2,30.5-1.2,38,0,56,17,96.1,51,120.2,34,24.1,91,36.2,171,36.2h202c92.8,0,157-13.1,192.6-39.2,35.6-26.1,53.4-72.3,53.4-138.4s-4.3-72.8-13-94.4c-8.7-21.6-23.3-38.4-43.8-50.4Z"/> <path d="M1593.5,131c-18.9-14.9-44-25.6-75-32-31.1-6.4-78-9.6-140.7-9.6h-198.9c-62.7,0-109.6,3.2-140.7,9.6-31.1,6.4-56.1,17.1-75,32-21.1,16.8-36.3,39.9-45.6,69.2-9.3,29.3-14,68.8-14,118.4v162.4c0,45.3,4.7,81.9,14.2,109.6,9.5,27.7,24.9,50.1,46.2,67.2,19.2,15.2,44,25.9,74.4,32.2,30.4,6.3,77.5,9.4,141.3,9.4h198.1c64.3,0,111.6-3.1,141.9-9.4,30.3-6.3,54.9-17,73.8-32.2,20.5-16.3,35.6-38.8,45.2-67.6,9.6-28.8,14.4-66.4,14.4-112.8v-166c0-46.1-4.8-83.7-14.4-112.6-9.6-28.9-24.7-51.5-45.2-67.8ZM1573.1,460.2v20c0,31.2-1.7,54.2-5.2,69-3.5,14.8-9.2,27.5-17.2,38.2-11.8,15.5-28,26.5-48.8,33.2-20.8,6.7-50.4,10-88.9,10h-269.4c-38.4,0-68-3.3-88.9-10-20.8-6.7-37.1-17.7-48.8-33.2-8.5-11.2-14.5-24.5-18-39.8-3.5-15.3-5.2-40.9-5.2-76.6v-156.4c0-35.7,1.7-61.3,5.2-76.6,3.5-15.3,9.5-28.6,18-39.8,11.7-15.5,28-26.5,48.8-33.2,20.8-6.7,50.4-10,88.9-10h269.4c38.4,0,68,3.3,88.9,10,20.8,6.7,37.1,17.7,48.8,33.2,8,10.7,13.7,23.3,17.2,38,3.5,14.7,5.2,37.7,5.2,69.2v154.8Z"/> <polygon points="2522.3 624.2 1983.9 96.6 1867.5 96.6 1867.5 692.2 1941.5 692.2 1941.5 156.6 2487.9 692.2 2595.9 692.2 2595.9 96.6 2522.3 96.6 2522.3 624.2"/> <path d="M4428.3,309.8v-71.6c0-54.1-15.4-91.3-46.2-111.4-30.8-20.1-93.5-30.2-188.2-30.2h-425.2v64.8h449.2c53.3,0,88.7,6.7,106.2,20,17.5,13.3,26.2,40,26.2,80v28.4c0,40.3-8.7,67-26.2,80.2-17.5,13.2-52.9,19.8-106.2,19.8h-449.2v302.4h74v-233.6h361.2c62.1,0,101.7,7.1,118.6,21.2,16.9,14.1,25.4,40.7,25.4,79.6v132.8h74v-147.6c0-34.7-8.3-61.8-24.8-81.4-16.5-19.6-41.1-31.1-73.6-34.6,39.2-8.3,66.5-20.9,81.8-38,15.3-17.1,23-44,23-80.8Z"/> <polygon points="3231.1 96.6 3132.7 96.6 2787.1 692.2 2871.5 692.2 2983.6 498.2 2983.5 498.2 3182.7 155.8 3385.1 498.2 3384.9 498.2 3499.1 692.2 3577.5 692.2 3231.1 96.6"/> </g> </svg></div><canvas id="cState"></canvas></div>
+        <div class="csrc">FMCSA aayw-vxb3 — GROUP BY state ORDER BY count DESC</div>
+      </div>
+    </div>
+    <div class="g3">
+      <div class="card">
+        <div class="ct">Hazmat releases by year</div>
+        <div class="cs">HAZMAT_RELEASED = 'Y' · annual</div>
+        <div class="chart-wrap" style="position:relative;height:200px"><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:55%;opacity:0.04;pointer-events:none;user-select:none;z-index:0"><svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 4465.5 788.8"> <!-- Generator: Adobe Illustrator 29.1.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 142) --> <g> <path d="M652.4,377c-14.1-8.5-33-14.7-56.6-18.4-23.6-3.7-58.7-5.6-105.4-5.6h-214c-66.1,0-109.7-7.2-130.6-21.6-21-14.4-31.4-40.8-31.4-79.2s10.7-63.9,32.2-78c21.5-14.1,63.1-21.2,125-21.2h203.2c60.8,0,100.6,6.9,119.4,20.6,18.8,13.7,28.2,40.2,28.2,79.4v9.2h71.2v-17.2c0-28.8-3.3-52.7-9.8-71.8-6.5-19.1-16.6-34.5-30.2-46.2-16.8-13.9-40-23.6-69.6-29.2-29.6-5.6-81.3-8.4-155.2-8.4h-135.2c-97.6,0-164.7,12.3-201.4,37-36.7,24.7-55,67.7-55,129s16.1,102.3,48.2,127c32.1,24.7,87.9,37,167.4,37h251.6c53.1,0,88.1,7,105.2,21,17.1,14,25.6,39.8,25.6,77.4s-12.3,75.6-36.8,91.6c-24.5,16-77.2,24-158,24h-155.6c-67.2,0-113.1-7.3-137.6-22-24.5-14.7-36.8-40.7-36.8-78s.3-12.1.8-23.6c.3-4.8.5-8.7.8-11.6H40.8c-.3,1.6-.4,3.9-.4,6.8-.8,17.9-1.2,30.5-1.2,38,0,56,17,96.1,51,120.2,34,24.1,91,36.2,171,36.2h202c92.8,0,157-13.1,192.6-39.2,35.6-26.1,53.4-72.3,53.4-138.4s-4.3-72.8-13-94.4c-8.7-21.6-23.3-38.4-43.8-50.4Z"/> <path d="M1593.5,131c-18.9-14.9-44-25.6-75-32-31.1-6.4-78-9.6-140.7-9.6h-198.9c-62.7,0-109.6,3.2-140.7,9.6-31.1,6.4-56.1,17.1-75,32-21.1,16.8-36.3,39.9-45.6,69.2-9.3,29.3-14,68.8-14,118.4v162.4c0,45.3,4.7,81.9,14.2,109.6,9.5,27.7,24.9,50.1,46.2,67.2,19.2,15.2,44,25.9,74.4,32.2,30.4,6.3,77.5,9.4,141.3,9.4h198.1c64.3,0,111.6-3.1,141.9-9.4,30.3-6.3,54.9-17,73.8-32.2,20.5-16.3,35.6-38.8,45.2-67.6,9.6-28.8,14.4-66.4,14.4-112.8v-166c0-46.1-4.8-83.7-14.4-112.6-9.6-28.9-24.7-51.5-45.2-67.8ZM1573.1,460.2v20c0,31.2-1.7,54.2-5.2,69-3.5,14.8-9.2,27.5-17.2,38.2-11.8,15.5-28,26.5-48.8,33.2-20.8,6.7-50.4,10-88.9,10h-269.4c-38.4,0-68-3.3-88.9-10-20.8-6.7-37.1-17.7-48.8-33.2-8.5-11.2-14.5-24.5-18-39.8-3.5-15.3-5.2-40.9-5.2-76.6v-156.4c0-35.7,1.7-61.3,5.2-76.6,3.5-15.3,9.5-28.6,18-39.8,11.7-15.5,28-26.5,48.8-33.2,20.8-6.7,50.4-10,88.9-10h269.4c38.4,0,68,3.3,88.9,10,20.8,6.7,37.1,17.7,48.8,33.2,8,10.7,13.7,23.3,17.2,38,3.5,14.7,5.2,37.7,5.2,69.2v154.8Z"/> <polygon points="2522.3 624.2 1983.9 96.6 1867.5 96.6 1867.5 692.2 1941.5 692.2 1941.5 156.6 2487.9 692.2 2595.9 692.2 2595.9 96.6 2522.3 96.6 2522.3 624.2"/> <path d="M4428.3,309.8v-71.6c0-54.1-15.4-91.3-46.2-111.4-30.8-20.1-93.5-30.2-188.2-30.2h-425.2v64.8h449.2c53.3,0,88.7,6.7,106.2,20,17.5,13.3,26.2,40,26.2,80v28.4c0,40.3-8.7,67-26.2,80.2-17.5,13.2-52.9,19.8-106.2,19.8h-449.2v302.4h74v-233.6h361.2c62.1,0,101.7,7.1,118.6,21.2,16.9,14.1,25.4,40.7,25.4,79.6v132.8h74v-147.6c0-34.7-8.3-61.8-24.8-81.4-16.5-19.6-41.1-31.1-73.6-34.6,39.2-8.3,66.5-20.9,81.8-38,15.3-17.1,23-44,23-80.8Z"/> <polygon points="3231.1 96.6 3132.7 96.6 2787.1 692.2 2871.5 692.2 2983.6 498.2 2983.5 498.2 3182.7 155.8 3385.1 498.2 3384.9 498.2 3499.1 692.2 3577.5 692.2 3231.1 96.6"/> </g> </svg></div><canvas id="cHaz"></canvas></div>
+        <div class="csrc">WHERE hazmat_released='Y' per year</div>
+      </div>
+      <div class="card">
+        <div class="ct">Crash severity split</div>
+        <div class="cs">Fatal / injury / tow-away / other</div>
+        <div class="chart-wrap" style="position:relative;height:220px"><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:55%;opacity:0.04;pointer-events:none;user-select:none;z-index:0"><svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 4465.5 788.8"> <!-- Generator: Adobe Illustrator 29.1.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 142) --> <g> <path d="M652.4,377c-14.1-8.5-33-14.7-56.6-18.4-23.6-3.7-58.7-5.6-105.4-5.6h-214c-66.1,0-109.7-7.2-130.6-21.6-21-14.4-31.4-40.8-31.4-79.2s10.7-63.9,32.2-78c21.5-14.1,63.1-21.2,125-21.2h203.2c60.8,0,100.6,6.9,119.4,20.6,18.8,13.7,28.2,40.2,28.2,79.4v9.2h71.2v-17.2c0-28.8-3.3-52.7-9.8-71.8-6.5-19.1-16.6-34.5-30.2-46.2-16.8-13.9-40-23.6-69.6-29.2-29.6-5.6-81.3-8.4-155.2-8.4h-135.2c-97.6,0-164.7,12.3-201.4,37-36.7,24.7-55,67.7-55,129s16.1,102.3,48.2,127c32.1,24.7,87.9,37,167.4,37h251.6c53.1,0,88.1,7,105.2,21,17.1,14,25.6,39.8,25.6,77.4s-12.3,75.6-36.8,91.6c-24.5,16-77.2,24-158,24h-155.6c-67.2,0-113.1-7.3-137.6-22-24.5-14.7-36.8-40.7-36.8-78s.3-12.1.8-23.6c.3-4.8.5-8.7.8-11.6H40.8c-.3,1.6-.4,3.9-.4,6.8-.8,17.9-1.2,30.5-1.2,38,0,56,17,96.1,51,120.2,34,24.1,91,36.2,171,36.2h202c92.8,0,157-13.1,192.6-39.2,35.6-26.1,53.4-72.3,53.4-138.4s-4.3-72.8-13-94.4c-8.7-21.6-23.3-38.4-43.8-50.4Z"/> <path d="M1593.5,131c-18.9-14.9-44-25.6-75-32-31.1-6.4-78-9.6-140.7-9.6h-198.9c-62.7,0-109.6,3.2-140.7,9.6-31.1,6.4-56.1,17.1-75,32-21.1,16.8-36.3,39.9-45.6,69.2-9.3,29.3-14,68.8-14,118.4v162.4c0,45.3,4.7,81.9,14.2,109.6,9.5,27.7,24.9,50.1,46.2,67.2,19.2,15.2,44,25.9,74.4,32.2,30.4,6.3,77.5,9.4,141.3,9.4h198.1c64.3,0,111.6-3.1,141.9-9.4,30.3-6.3,54.9-17,73.8-32.2,20.5-16.3,35.6-38.8,45.2-67.6,9.6-28.8,14.4-66.4,14.4-112.8v-166c0-46.1-4.8-83.7-14.4-112.6-9.6-28.9-24.7-51.5-45.2-67.8ZM1573.1,460.2v20c0,31.2-1.7,54.2-5.2,69-3.5,14.8-9.2,27.5-17.2,38.2-11.8,15.5-28,26.5-48.8,33.2-20.8,6.7-50.4,10-88.9,10h-269.4c-38.4,0-68-3.3-88.9-10-20.8-6.7-37.1-17.7-48.8-33.2-8.5-11.2-14.5-24.5-18-39.8-3.5-15.3-5.2-40.9-5.2-76.6v-156.4c0-35.7,1.7-61.3,5.2-76.6,3.5-15.3,9.5-28.6,18-39.8,11.7-15.5,28-26.5,48.8-33.2,20.8-6.7,50.4-10,88.9-10h269.4c38.4,0,68,3.3,88.9,10,20.8,6.7,37.1,17.7,48.8,33.2,8,10.7,13.7,23.3,17.2,38,3.5,14.7,5.2,37.7,5.2,69.2v154.8Z"/> <polygon points="2522.3 624.2 1983.9 96.6 1867.5 96.6 1867.5 692.2 1941.5 692.2 1941.5 156.6 2487.9 692.2 2595.9 692.2 2595.9 96.6 2522.3 96.6 2522.3 624.2"/> <path d="M4428.3,309.8v-71.6c0-54.1-15.4-91.3-46.2-111.4-30.8-20.1-93.5-30.2-188.2-30.2h-425.2v64.8h449.2c53.3,0,88.7,6.7,106.2,20,17.5,13.3,26.2,40,26.2,80v28.4c0,40.3-8.7,67-26.2,80.2-17.5,13.2-52.9,19.8-106.2,19.8h-449.2v302.4h74v-233.6h361.2c62.1,0,101.7,7.1,118.6,21.2,16.9,14.1,25.4,40.7,25.4,79.6v132.8h74v-147.6c0-34.7-8.3-61.8-24.8-81.4-16.5-19.6-41.1-31.1-73.6-34.6,39.2-8.3,66.5-20.9,81.8-38,15.3-17.1,23-44,23-80.8Z"/> <polygon points="3231.1 96.6 3132.7 96.6 2787.1 692.2 2871.5 692.2 2983.6 498.2 2983.5 498.2 3182.7 155.8 3385.1 498.2 3384.9 498.2 3499.1 692.2 3577.5 692.2 3231.1 96.6"/> </g> </svg></div><canvas id="cSev"></canvas></div>
+        <div class="csrc">Aggregated severity counts</div>
+      </div>
+      <div class="card">
+        <div class="ct">Cargo body type</div>
+        <div class="cs">All crashes — CARGO_BODY_TYPE_ID</div>
+        <div id="cargoBars" style="margin-top:4px"></div>
+        <div class="csrc">GROUP BY cargo_body_type_id</div>
+      </div>
+    </div>
+    <div class="g31">
+      <div class="card">
+        <div class="ct">Crash density by state</div>
+        <div class="cs">Total CMV crashes — all years</div>
+        <svg id="map" viewBox="0 0 960 600"></svg>
+        <div class="mlegrow"><span>Fewer</span><div class="mlegbar" id="mleg"></div><span>More</span></div>
+        <div class="csrc">FMCSA aayw-vxb3 — GROUP BY state</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="card" style="flex:1">
+          <div class="ct">Hazmat releases by state — top 10</div>
+          <div class="cs">WHERE hazmat_released='Y'</div>
+          <div id="hazStateBars" style="margin-top:4px"></div>
+          <div class="csrc">FMCSA aayw-vxb3 — hazmat by state</div>
+        </div>
+        <div class="card" style="flex:1">
+          <div class="ct">Trucks vs. buses — recent 5 years</div>
+          <div class="cs">TRUCK_BUS_IND · T = truck, B = bus</div>
+          <div class="chart-wrap" style="position:relative;height:140px"><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:55%;opacity:0.04;pointer-events:none;user-select:none;z-index:0"><svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 4465.5 788.8"> <!-- Generator: Adobe Illustrator 29.1.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 142) --> <g> <path d="M652.4,377c-14.1-8.5-33-14.7-56.6-18.4-23.6-3.7-58.7-5.6-105.4-5.6h-214c-66.1,0-109.7-7.2-130.6-21.6-21-14.4-31.4-40.8-31.4-79.2s10.7-63.9,32.2-78c21.5-14.1,63.1-21.2,125-21.2h203.2c60.8,0,100.6,6.9,119.4,20.6,18.8,13.7,28.2,40.2,28.2,79.4v9.2h71.2v-17.2c0-28.8-3.3-52.7-9.8-71.8-6.5-19.1-16.6-34.5-30.2-46.2-16.8-13.9-40-23.6-69.6-29.2-29.6-5.6-81.3-8.4-155.2-8.4h-135.2c-97.6,0-164.7,12.3-201.4,37-36.7,24.7-55,67.7-55,129s16.1,102.3,48.2,127c32.1,24.7,87.9,37,167.4,37h251.6c53.1,0,88.1,7,105.2,21,17.1,14,25.6,39.8,25.6,77.4s-12.3,75.6-36.8,91.6c-24.5,16-77.2,24-158,24h-155.6c-67.2,0-113.1-7.3-137.6-22-24.5-14.7-36.8-40.7-36.8-78s.3-12.1.8-23.6c.3-4.8.5-8.7.8-11.6H40.8c-.3,1.6-.4,3.9-.4,6.8-.8,17.9-1.2,30.5-1.2,38,0,56,17,96.1,51,120.2,34,24.1,91,36.2,171,36.2h202c92.8,0,157-13.1,192.6-39.2,35.6-26.1,53.4-72.3,53.4-138.4s-4.3-72.8-13-94.4c-8.7-21.6-23.3-38.4-43.8-50.4Z"/> <path d="M1593.5,131c-18.9-14.9-44-25.6-75-32-31.1-6.4-78-9.6-140.7-9.6h-198.9c-62.7,0-109.6,3.2-140.7,9.6-31.1,6.4-56.1,17.1-75,32-21.1,16.8-36.3,39.9-45.6,69.2-9.3,29.3-14,68.8-14,118.4v162.4c0,45.3,4.7,81.9,14.2,109.6,9.5,27.7,24.9,50.1,46.2,67.2,19.2,15.2,44,25.9,74.4,32.2,30.4,6.3,77.5,9.4,141.3,9.4h198.1c64.3,0,111.6-3.1,141.9-9.4,30.3-6.3,54.9-17,73.8-32.2,20.5-16.3,35.6-38.8,45.2-67.6,9.6-28.8,14.4-66.4,14.4-112.8v-166c0-46.1-4.8-83.7-14.4-112.6-9.6-28.9-24.7-51.5-45.2-67.8ZM1573.1,460.2v20c0,31.2-1.7,54.2-5.2,69-3.5,14.8-9.2,27.5-17.2,38.2-11.8,15.5-28,26.5-48.8,33.2-20.8,6.7-50.4,10-88.9,10h-269.4c-38.4,0-68-3.3-88.9-10-20.8-6.7-37.1-17.7-48.8-33.2-8.5-11.2-14.5-24.5-18-39.8-3.5-15.3-5.2-40.9-5.2-76.6v-156.4c0-35.7,1.7-61.3,5.2-76.6,3.5-15.3,9.5-28.6,18-39.8,11.7-15.5,28-26.5,48.8-33.2,20.8-6.7,50.4-10,88.9-10h269.4c38.4,0,68,3.3,88.9,10,20.8,6.7,37.1,17.7,48.8,33.2,8,10.7,13.7,23.3,17.2,38,3.5,14.7,5.2,37.7,5.2,69.2v154.8Z"/> <polygon points="2522.3 624.2 1983.9 96.6 1867.5 96.6 1867.5 692.2 1941.5 692.2 1941.5 156.6 2487.9 692.2 2595.9 692.2 2595.9 96.6 2522.3 96.6 2522.3 624.2"/> <path d="M4428.3,309.8v-71.6c0-54.1-15.4-91.3-46.2-111.4-30.8-20.1-93.5-30.2-188.2-30.2h-425.2v64.8h449.2c53.3,0,88.7,6.7,106.2,20,17.5,13.3,26.2,40,26.2,80v28.4c0,40.3-8.7,67-26.2,80.2-17.5,13.2-52.9,19.8-106.2,19.8h-449.2v302.4h74v-233.6h361.2c62.1,0,101.7,7.1,118.6,21.2,16.9,14.1,25.4,40.7,25.4,79.6v132.8h74v-147.6c0-34.7-8.3-61.8-24.8-81.4-16.5-19.6-41.1-31.1-73.6-34.6,39.2-8.3,66.5-20.9,81.8-38,15.3-17.1,23-44,23-80.8Z"/> <polygon points="3231.1 96.6 3132.7 96.6 2787.1 692.2 2871.5 692.2 2983.6 498.2 2983.5 498.2 3182.7 155.8 3385.1 498.2 3384.9 498.2 3499.1 692.2 3577.5 692.2 3231.1 96.6"/> </g> </svg></div><canvas id="cVeh"></canvas></div>
+          <div class="csrc">COUNT by truck_bus_ind per year</div>
+        </div>
+      </div>
+    </div>
+    <div class="card mb16">
+      <div class="ct">Most recent hazmat CMV crash records</div>
+      <div class="cs">HAZMAT_RELEASED = 'Y' · 50 most recent</div>
+      <table class="tbl">
+        <thead><tr>
+          <th>Date</th><th>State</th><th>City</th><th>Carrier</th>
+          <th>DOT #</th><th>Veh.</th><th>Hazmat</th><th>Vehicles</th><th>Fatal</th><th>Injured</th><th>Tow</th>
+        </tr></thead>
+        <tbody id="recTbl"></tbody>
+      </table>
+      <div class="csrc">FMCSA aayw-vxb3 — WHERE hazmat_released='Y' ORDER BY report_date DESC LIMIT 50</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       TAB: CENSUS / CARRIERS (az4n-8mr2)
+  ══════════════════════════════════════════════ -->
+  <div class="tabpanel" id="tab-census">
+    <div class="sec"><div class="sec-line"></div><div class="sec-label">Carrier census — az4n-8mr2 · 4.4M registered carriers</div><div class="sec-line"></div></div>
+    <div class="krow4">
+      <div class="kpi"><div class="klbl">Total carriers</div><div class="kval" id="cTot">—</div><div class="ksub">all registered entities</div></div>
+      <div class="kpi"><div class="klbl">Interstate (A)</div><div class="kval" style="color:var(--blu)" id="cA">—</div><div class="ksub">carrier_operation = A</div></div>
+      <div class="kpi"><div class="klbl">Intrastate HM (B)</div><div class="kval" style="color:var(--am)" id="cB">—</div><div class="ksub">carrier_operation = B</div></div>
+      <div class="kpi"><div class="klbl">Intrastate non-HM (C)</div><div class="kval" id="cC">—</div><div class="ksub">carrier_operation = C</div></div>
+    </div>
+    <div class="g3">
+      <div class="card">
+        <div class="ct">Carriers by state</div>
+        <div class="cs">PHY_STATE — registered address · top 15</div>
+        <div class="chart-wrap" style="position:relative;height:290px"><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:55%;opacity:0.04;pointer-events:none;user-select:none;z-index:0"><svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 4465.5 788.8"> <!-- Generator: Adobe Illustrator 29.1.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 142) --> <g> <path d="M652.4,377c-14.1-8.5-33-14.7-56.6-18.4-23.6-3.7-58.7-5.6-105.4-5.6h-214c-66.1,0-109.7-7.2-130.6-21.6-21-14.4-31.4-40.8-31.4-79.2s10.7-63.9,32.2-78c21.5-14.1,63.1-21.2,125-21.2h203.2c60.8,0,100.6,6.9,119.4,20.6,18.8,13.7,28.2,40.2,28.2,79.4v9.2h71.2v-17.2c0-28.8-3.3-52.7-9.8-71.8-6.5-19.1-16.6-34.5-30.2-46.2-16.8-13.9-40-23.6-69.6-29.2-29.6-5.6-81.3-8.4-155.2-8.4h-135.2c-97.6,0-164.7,12.3-201.4,37-36.7,24.7-55,67.7-55,129s16.1,102.3,48.2,127c32.1,24.7,87.9,37,167.4,37h251.6c53.1,0,88.1,7,105.2,21,17.1,14,25.6,39.8,25.6,77.4s-12.3,75.6-36.8,91.6c-24.5,16-77.2,24-158,24h-155.6c-67.2,0-113.1-7.3-137.6-22-24.5-14.7-36.8-40.7-36.8-78s.3-12.1.8-23.6c.3-4.8.5-8.7.8-11.6H40.8c-.3,1.6-.4,3.9-.4,6.8-.8,17.9-1.2,30.5-1.2,38,0,56,17,96.1,51,120.2,34,24.1,91,36.2,171,36.2h202c92.8,0,157-13.1,192.6-39.2,35.6-26.1,53.4-72.3,53.4-138.4s-4.3-72.8-13-94.4c-8.7-21.6-23.3-38.4-43.8-50.4Z"/> <path d="M1593.5,131c-18.9-14.9-44-25.6-75-32-31.1-6.4-78-9.6-140.7-9.6h-198.9c-62.7,0-109.6,3.2-140.7,9.6-31.1,6.4-56.1,17.1-75,32-21.1,16.8-36.3,39.9-45.6,69.2-9.3,29.3-14,68.8-14,118.4v162.4c0,45.3,4.7,81.9,14.2,109.6,9.5,27.7,24.9,50.1,46.2,67.2,19.2,15.2,44,25.9,74.4,32.2,30.4,6.3,77.5,9.4,141.3,9.4h198.1c64.3,0,111.6-3.1,141.9-9.4,30.3-6.3,54.9-17,73.8-32.2,20.5-16.3,35.6-38.8,45.2-67.6,9.6-28.8,14.4-66.4,14.4-112.8v-166c0-46.1-4.8-83.7-14.4-112.6-9.6-28.9-24.7-51.5-45.2-67.8ZM1573.1,460.2v20c0,31.2-1.7,54.2-5.2,69-3.5,14.8-9.2,27.5-17.2,38.2-11.8,15.5-28,26.5-48.8,33.2-20.8,6.7-50.4,10-88.9,10h-269.4c-38.4,0-68-3.3-88.9-10-20.8-6.7-37.1-17.7-48.8-33.2-8.5-11.2-14.5-24.5-18-39.8-3.5-15.3-5.2-40.9-5.2-76.6v-156.4c0-35.7,1.7-61.3,5.2-76.6,3.5-15.3,9.5-28.6,18-39.8,11.7-15.5,28-26.5,48.8-33.2,20.8-6.7,50.4-10,88.9-10h269.4c38.4,0,68,3.3,88.9,10,20.8,6.7,37.1,17.7,48.8,33.2,8,10.7,13.7,23.3,17.2,38,3.5,14.7,5.2,37.7,5.2,69.2v154.8Z"/> <polygon points="2522.3 624.2 1983.9 96.6 1867.5 96.6 1867.5 692.2 1941.5 692.2 1941.5 156.6 2487.9 692.2 2595.9 692.2 2595.9 96.6 2522.3 96.6 2522.3 624.2"/> <path d="M4428.3,309.8v-71.6c0-54.1-15.4-91.3-46.2-111.4-30.8-20.1-93.5-30.2-188.2-30.2h-425.2v64.8h449.2c53.3,0,88.7,6.7,106.2,20,17.5,13.3,26.2,40,26.2,80v28.4c0,40.3-8.7,67-26.2,80.2-17.5,13.2-52.9,19.8-106.2,19.8h-449.2v302.4h74v-233.6h361.2c62.1,0,101.7,7.1,118.6,21.2,16.9,14.1,25.4,40.7,25.4,79.6v132.8h74v-147.6c0-34.7-8.3-61.8-24.8-81.4-16.5-19.6-41.1-31.1-73.6-34.6,39.2-8.3,66.5-20.9,81.8-38,15.3-17.1,23-44,23-80.8Z"/> <polygon points="3231.1 96.6 3132.7 96.6 2787.1 692.2 2871.5 692.2 2983.6 498.2 2983.5 498.2 3182.7 155.8 3385.1 498.2 3384.9 498.2 3499.1 692.2 3577.5 692.2 3231.1 96.6"/> </g> </svg></div><canvas id="cCensusState"></canvas></div>
+        <div class="csrc">FMCSA az4n-8mr2 — GROUP BY phy_state ORDER BY count DESC</div>
+      </div>
+      <div class="card">
+        <div class="ct">Safety rating breakdown</div>
+        <div class="cs">SAFETY_RATING field — S=Satisfactory, C=Conditional, U=Unsatisfactory</div>
+        <div class="chart-wrap" style="position:relative;height:260px"><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:55%;opacity:0.04;pointer-events:none;user-select:none;z-index:0"><svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 4465.5 788.8"> <!-- Generator: Adobe Illustrator 29.1.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 142) --> <g> <path d="M652.4,377c-14.1-8.5-33-14.7-56.6-18.4-23.6-3.7-58.7-5.6-105.4-5.6h-214c-66.1,0-109.7-7.2-130.6-21.6-21-14.4-31.4-40.8-31.4-79.2s10.7-63.9,32.2-78c21.5-14.1,63.1-21.2,125-21.2h203.2c60.8,0,100.6,6.9,119.4,20.6,18.8,13.7,28.2,40.2,28.2,79.4v9.2h71.2v-17.2c0-28.8-3.3-52.7-9.8-71.8-6.5-19.1-16.6-34.5-30.2-46.2-16.8-13.9-40-23.6-69.6-29.2-29.6-5.6-81.3-8.4-155.2-8.4h-135.2c-97.6,0-164.7,12.3-201.4,37-36.7,24.7-55,67.7-55,129s16.1,102.3,48.2,127c32.1,24.7,87.9,37,167.4,37h251.6c53.1,0,88.1,7,105.2,21,17.1,14,25.6,39.8,25.6,77.4s-12.3,75.6-36.8,91.6c-24.5,16-77.2,24-158,24h-155.6c-67.2,0-113.1-7.3-137.6-22-24.5-14.7-36.8-40.7-36.8-78s.3-12.1.8-23.6c.3-4.8.5-8.7.8-11.6H40.8c-.3,1.6-.4,3.9-.4,6.8-.8,17.9-1.2,30.5-1.2,38,0,56,17,96.1,51,120.2,34,24.1,91,36.2,171,36.2h202c92.8,0,157-13.1,192.6-39.2,35.6-26.1,53.4-72.3,53.4-138.4s-4.3-72.8-13-94.4c-8.7-21.6-23.3-38.4-43.8-50.4Z"/> <path d="M1593.5,131c-18.9-14.9-44-25.6-75-32-31.1-6.4-78-9.6-140.7-9.6h-198.9c-62.7,0-109.6,3.2-140.7,9.6-31.1,6.4-56.1,17.1-75,32-21.1,16.8-36.3,39.9-45.6,69.2-9.3,29.3-14,68.8-14,118.4v162.4c0,45.3,4.7,81.9,14.2,109.6,9.5,27.7,24.9,50.1,46.2,67.2,19.2,15.2,44,25.9,74.4,32.2,30.4,6.3,77.5,9.4,141.3,9.4h198.1c64.3,0,111.6-3.1,141.9-9.4,30.3-6.3,54.9-17,73.8-32.2,20.5-16.3,35.6-38.8,45.2-67.6,9.6-28.8,14.4-66.4,14.4-112.8v-166c0-46.1-4.8-83.7-14.4-112.6-9.6-28.9-24.7-51.5-45.2-67.8ZM1573.1,460.2v20c0,31.2-1.7,54.2-5.2,69-3.5,14.8-9.2,27.5-17.2,38.2-11.8,15.5-28,26.5-48.8,33.2-20.8,6.7-50.4,10-88.9,10h-269.4c-38.4,0-68-3.3-88.9-10-20.8-6.7-37.1-17.7-48.8-33.2-8.5-11.2-14.5-24.5-18-39.8-3.5-15.3-5.2-40.9-5.2-76.6v-156.4c0-35.7,1.7-61.3,5.2-76.6,3.5-15.3,9.5-28.6,18-39.8,11.7-15.5,28-26.5,48.8-33.2,20.8-6.7,50.4-10,88.9-10h269.4c38.4,0,68,3.3,88.9,10,20.8,6.7,37.1,17.7,48.8,33.2,8,10.7,13.7,23.3,17.2,38,3.5,14.7,5.2,37.7,5.2,69.2v154.8Z"/> <polygon points="2522.3 624.2 1983.9 96.6 1867.5 96.6 1867.5 692.2 1941.5 692.2 1941.5 156.6 2487.9 692.2 2595.9 692.2 2595.9 96.6 2522.3 96.6 2522.3 624.2"/> <path d="M4428.3,309.8v-71.6c0-54.1-15.4-91.3-46.2-111.4-30.8-20.1-93.5-30.2-188.2-30.2h-425.2v64.8h449.2c53.3,0,88.7,6.7,106.2,20,17.5,13.3,26.2,40,26.2,80v28.4c0,40.3-8.7,67-26.2,80.2-17.5,13.2-52.9,19.8-106.2,19.8h-449.2v302.4h74v-233.6h361.2c62.1,0,101.7,7.1,118.6,21.2,16.9,14.1,25.4,40.7,25.4,79.6v132.8h74v-147.6c0-34.7-8.3-61.8-24.8-81.4-16.5-19.6-41.1-31.1-73.6-34.6,39.2-8.3,66.5-20.9,81.8-38,15.3-17.1,23-44,23-80.8Z"/> <polygon points="3231.1 96.6 3132.7 96.6 2787.1 692.2 2871.5 692.2 2983.6 498.2 2983.5 498.2 3182.7 155.8 3385.1 498.2 3384.9 498.2 3499.1 692.2 3577.5 692.2 3231.1 96.6"/> </g> </svg></div><canvas id="cRating"></canvas></div>
+        <div class="csrc">FMCSA az4n-8mr2 — GROUP BY safety_rating</div>
+      </div>
+      <div class="card">
+        <div class="ct">Hazmat carriers by state — top 10</div>
+        <div class="cs">WHERE hm_ind = 'A' (active hazmat authority)</div>
+        <div id="hmStateBars" style="margin-top:4px"></div>
+        <div class="csrc">FMCSA az4n-8mr2 — WHERE hm_ind='A' GROUP BY phy_state</div>
+      </div>
+    </div>
+    <div class="g2">
+      <div class="card">
+        <div class="ct">Carrier operation type breakdown</div>
+        <div class="cs">A = Interstate · B = Intrastate HM · C = Intrastate non-HM</div>
+        <div id="opBars" style="margin-top:4px"></div>
+        <div class="csrc">FMCSA az4n-8mr2 — GROUP BY carrier_operation</div>
+      </div>
+      <div class="card">
+        <div class="ct">Recent carrier registrations</div>
+        <div class="cs">Latest 30 carriers by add_date descending</div>
+        <table class="tbl">
+          <thead><tr><th>DOT #</th><th>Name</th><th>State</th><th>Operation</th><th>Rating</th><th>HM</th><th>Fleet</th></tr></thead>
+          <tbody id="censusTable"></tbody>
+        </table>
+        <div class="csrc">FMCSA az4n-8mr2 — ORDER BY add_date DESC LIMIT 30</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       TAB: INSPECTIONS (fx4q-ay7w)
+  ══════════════════════════════════════════════ -->
+  <div class="tabpanel" id="tab-inspect">
+    <div class="sec"><div class="sec-line"></div><div class="sec-label">Inspections — fx4q-ay7w · 8.19M records</div><div class="sec-line"></div></div>
+    <div class="krow4">
+      <div class="kpi"><div class="klbl">Total inspections</div><div class="kval" id="iTot">—</div><div class="ksub">all on record</div></div>
+      <div class="kpi"><div class="klbl">OOS violations</div><div class="kval" style="color:var(--red)" id="iOOS">—</div><div class="ksub">oos_total &gt; 0</div></div>
+      <div class="kpi"><div class="klbl">Hazmat violations</div><div class="kval" style="color:var(--am)" id="iHazViol">—</div><div class="ksub">hazmat_viol_total &gt; 0</div></div>
+      <div class="kpi"><div class="klbl">Hazmat OOS</div><div class="kval" style="color:var(--red)" id="iHazOOS">—</div><div class="ksub">hazmat_oos_total &gt; 0</div></div>
+    </div>
+    <div class="g2">
+      <div class="card">
+        <div class="ct">Inspections by state — top 15</div>
+        <div class="cs">REPORT_STATE field · all inspections</div>
+        <div class="chart-wrap" style="position:relative;height:290px"><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:55%;opacity:0.04;pointer-events:none;user-select:none;z-index:0"><svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 4465.5 788.8"> <!-- Generator: Adobe Illustrator 29.1.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 142) --> <g> <path d="M652.4,377c-14.1-8.5-33-14.7-56.6-18.4-23.6-3.7-58.7-5.6-105.4-5.6h-214c-66.1,0-109.7-7.2-130.6-21.6-21-14.4-31.4-40.8-31.4-79.2s10.7-63.9,32.2-78c21.5-14.1,63.1-21.2,125-21.2h203.2c60.8,0,100.6,6.9,119.4,20.6,18.8,13.7,28.2,40.2,28.2,79.4v9.2h71.2v-17.2c0-28.8-3.3-52.7-9.8-71.8-6.5-19.1-16.6-34.5-30.2-46.2-16.8-13.9-40-23.6-69.6-29.2-29.6-5.6-81.3-8.4-155.2-8.4h-135.2c-97.6,0-164.7,12.3-201.4,37-36.7,24.7-55,67.7-55,129s16.1,102.3,48.2,127c32.1,24.7,87.9,37,167.4,37h251.6c53.1,0,88.1,7,105.2,21,17.1,14,25.6,39.8,25.6,77.4s-12.3,75.6-36.8,91.6c-24.5,16-77.2,24-158,24h-155.6c-67.2,0-113.1-7.3-137.6-22-24.5-14.7-36.8-40.7-36.8-78s.3-12.1.8-23.6c.3-4.8.5-8.7.8-11.6H40.8c-.3,1.6-.4,3.9-.4,6.8-.8,17.9-1.2,30.5-1.2,38,0,56,17,96.1,51,120.2,34,24.1,91,36.2,171,36.2h202c92.8,0,157-13.1,192.6-39.2,35.6-26.1,53.4-72.3,53.4-138.4s-4.3-72.8-13-94.4c-8.7-21.6-23.3-38.4-43.8-50.4Z"/> <path d="M1593.5,131c-18.9-14.9-44-25.6-75-32-31.1-6.4-78-9.6-140.7-9.6h-198.9c-62.7,0-109.6,3.2-140.7,9.6-31.1,6.4-56.1,17.1-75,32-21.1,16.8-36.3,39.9-45.6,69.2-9.3,29.3-14,68.8-14,118.4v162.4c0,45.3,4.7,81.9,14.2,109.6,9.5,27.7,24.9,50.1,46.2,67.2,19.2,15.2,44,25.9,74.4,32.2,30.4,6.3,77.5,9.4,141.3,9.4h198.1c64.3,0,111.6-3.1,141.9-9.4,30.3-6.3,54.9-17,73.8-32.2,20.5-16.3,35.6-38.8,45.2-67.6,9.6-28.8,14.4-66.4,14.4-112.8v-166c0-46.1-4.8-83.7-14.4-112.6-9.6-28.9-24.7-51.5-45.2-67.8ZM1573.1,460.2v20c0,31.2-1.7,54.2-5.2,69-3.5,14.8-9.2,27.5-17.2,38.2-11.8,15.5-28,26.5-48.8,33.2-20.8,6.7-50.4,10-88.9,10h-269.4c-38.4,0-68-3.3-88.9-10-20.8-6.7-37.1-17.7-48.8-33.2-8.5-11.2-14.5-24.5-18-39.8-3.5-15.3-5.2-40.9-5.2-76.6v-156.4c0-35.7,1.7-61.3,5.2-76.6,3.5-15.3,9.5-28.6,18-39.8,11.7-15.5,28-26.5,48.8-33.2,20.8-6.7,50.4-10,88.9-10h269.4c38.4,0,68,3.3,88.9,10,20.8,6.7,37.1,17.7,48.8,33.2,8,10.7,13.7,23.3,17.2,38,3.5,14.7,5.2,37.7,5.2,69.2v154.8Z"/> <polygon points="2522.3 624.2 1983.9 96.6 1867.5 96.6 1867.5 692.2 1941.5 692.2 1941.5 156.6 2487.9 692.2 2595.9 692.2 2595.9 96.6 2522.3 96.6 2522.3 624.2"/> <path d="M4428.3,309.8v-71.6c0-54.1-15.4-91.3-46.2-111.4-30.8-20.1-93.5-30.2-188.2-30.2h-425.2v64.8h449.2c53.3,0,88.7,6.7,106.2,20,17.5,13.3,26.2,40,26.2,80v28.4c0,40.3-8.7,67-26.2,80.2-17.5,13.2-52.9,19.8-106.2,19.8h-449.2v302.4h74v-233.6h361.2c62.1,0,101.7,7.1,118.6,21.2,16.9,14.1,25.4,40.7,25.4,79.6v132.8h74v-147.6c0-34.7-8.3-61.8-24.8-81.4-16.5-19.6-41.1-31.1-73.6-34.6,39.2-8.3,66.5-20.9,81.8-38,15.3-17.1,23-44,23-80.8Z"/> <polygon points="3231.1 96.6 3132.7 96.6 2787.1 692.2 2871.5 692.2 2983.6 498.2 2983.5 498.2 3182.7 155.8 3385.1 498.2 3384.9 498.2 3499.1 692.2 3577.5 692.2 3231.1 96.6"/> </g> </svg></div><canvas id="iStateChart"></canvas></div>
+        <div class="csrc">FMCSA fx4q-ay7w — GROUP BY report_state ORDER BY count DESC LIMIT 15</div>
+      </div>
+      <div class="card">
+        <div class="ct">Inspection level breakdown</div>
+        <div class="cs">INSP_LEVEL_ID — 1=Full, 2=Walk-around, 3=Driver only, 4=Special, 5=Cargo, 6=Enhanced</div>
+        <div class="chart-wrap" style="position:relative;height:260px"><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:55%;opacity:0.04;pointer-events:none;user-select:none;z-index:0"><svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 4465.5 788.8"> <!-- Generator: Adobe Illustrator 29.1.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 142) --> <g> <path d="M652.4,377c-14.1-8.5-33-14.7-56.6-18.4-23.6-3.7-58.7-5.6-105.4-5.6h-214c-66.1,0-109.7-7.2-130.6-21.6-21-14.4-31.4-40.8-31.4-79.2s10.7-63.9,32.2-78c21.5-14.1,63.1-21.2,125-21.2h203.2c60.8,0,100.6,6.9,119.4,20.6,18.8,13.7,28.2,40.2,28.2,79.4v9.2h71.2v-17.2c0-28.8-3.3-52.7-9.8-71.8-6.5-19.1-16.6-34.5-30.2-46.2-16.8-13.9-40-23.6-69.6-29.2-29.6-5.6-81.3-8.4-155.2-8.4h-135.2c-97.6,0-164.7,12.3-201.4,37-36.7,24.7-55,67.7-55,129s16.1,102.3,48.2,127c32.1,24.7,87.9,37,167.4,37h251.6c53.1,0,88.1,7,105.2,21,17.1,14,25.6,39.8,25.6,77.4s-12.3,75.6-36.8,91.6c-24.5,16-77.2,24-158,24h-155.6c-67.2,0-113.1-7.3-137.6-22-24.5-14.7-36.8-40.7-36.8-78s.3-12.1.8-23.6c.3-4.8.5-8.7.8-11.6H40.8c-.3,1.6-.4,3.9-.4,6.8-.8,17.9-1.2,30.5-1.2,38,0,56,17,96.1,51,120.2,34,24.1,91,36.2,171,36.2h202c92.8,0,157-13.1,192.6-39.2,35.6-26.1,53.4-72.3,53.4-138.4s-4.3-72.8-13-94.4c-8.7-21.6-23.3-38.4-43.8-50.4Z"/> <path d="M1593.5,131c-18.9-14.9-44-25.6-75-32-31.1-6.4-78-9.6-140.7-9.6h-198.9c-62.7,0-109.6,3.2-140.7,9.6-31.1,6.4-56.1,17.1-75,32-21.1,16.8-36.3,39.9-45.6,69.2-9.3,29.3-14,68.8-14,118.4v162.4c0,45.3,4.7,81.9,14.2,109.6,9.5,27.7,24.9,50.1,46.2,67.2,19.2,15.2,44,25.9,74.4,32.2,30.4,6.3,77.5,9.4,141.3,9.4h198.1c64.3,0,111.6-3.1,141.9-9.4,30.3-6.3,54.9-17,73.8-32.2,20.5-16.3,35.6-38.8,45.2-67.6,9.6-28.8,14.4-66.4,14.4-112.8v-166c0-46.1-4.8-83.7-14.4-112.6-9.6-28.9-24.7-51.5-45.2-67.8ZM1573.1,460.2v20c0,31.2-1.7,54.2-5.2,69-3.5,14.8-9.2,27.5-17.2,38.2-11.8,15.5-28,26.5-48.8,33.2-20.8,6.7-50.4,10-88.9,10h-269.4c-38.4,0-68-3.3-88.9-10-20.8-6.7-37.1-17.7-48.8-33.2-8.5-11.2-14.5-24.5-18-39.8-3.5-15.3-5.2-40.9-5.2-76.6v-156.4c0-35.7,1.7-61.3,5.2-76.6,3.5-15.3,9.5-28.6,18-39.8,11.7-15.5,28-26.5,48.8-33.2,20.8-6.7,50.4-10,88.9-10h269.4c38.4,0,68,3.3,88.9,10,20.8,6.7,37.1,17.7,48.8,33.2,8,10.7,13.7,23.3,17.2,38,3.5,14.7,5.2,37.7,5.2,69.2v154.8Z"/> <polygon points="2522.3 624.2 1983.9 96.6 1867.5 96.6 1867.5 692.2 1941.5 692.2 1941.5 156.6 2487.9 692.2 2595.9 692.2 2595.9 96.6 2522.3 96.6 2522.3 624.2"/> <path d="M4428.3,309.8v-71.6c0-54.1-15.4-91.3-46.2-111.4-30.8-20.1-93.5-30.2-188.2-30.2h-425.2v64.8h449.2c53.3,0,88.7,6.7,106.2,20,17.5,13.3,26.2,40,26.2,80v28.4c0,40.3-8.7,67-26.2,80.2-17.5,13.2-52.9,19.8-106.2,19.8h-449.2v302.4h74v-233.6h361.2c62.1,0,101.7,7.1,118.6,21.2,16.9,14.1,25.4,40.7,25.4,79.6v132.8h74v-147.6c0-34.7-8.3-61.8-24.8-81.4-16.5-19.6-41.1-31.1-73.6-34.6,39.2-8.3,66.5-20.9,81.8-38,15.3-17.1,23-44,23-80.8Z"/> <polygon points="3231.1 96.6 3132.7 96.6 2787.1 692.2 2871.5 692.2 2983.6 498.2 2983.5 498.2 3182.7 155.8 3385.1 498.2 3384.9 498.2 3499.1 692.2 3577.5 692.2 3231.1 96.6"/> </g> </svg></div><canvas id="iLevelChart"></canvas></div>
+        <div class="csrc">FMCSA fx4q-ay7w — GROUP BY insp_level_id</div>
+      </div>
+    </div>
+    <div class="g3">
+      <div class="card">
+        <div class="ct">OOS violations by state — top 10</div>
+        <div class="cs">WHERE oos_total &gt; '0'</div>
+        <div id="oosStateBars" style="margin-top:4px"></div>
+        <div class="csrc">FMCSA fx4q-ay7w — WHERE oos_total>'0' GROUP BY report_state</div>
+      </div>
+      <div class="card">
+        <div class="ct">Hazmat violations by state — top 10</div>
+        <div class="cs">WHERE hazmat_viol_total &gt; '0'</div>
+        <div id="hazViolBars" style="margin-top:4px"></div>
+        <div class="csrc">FMCSA fx4q-ay7w — WHERE hazmat_viol_total>'0' GROUP BY report_state</div>
+      </div>
+      <div class="card">
+        <div class="ct">CI status breakdown</div>
+        <div class="cs">CI_STATUS_CODE — inspection outcome classification</div>
+        <div id="ciStatusBars" style="margin-top:4px"></div>
+        <div class="csrc">FMCSA fx4q-ay7w — GROUP BY ci_status_code</div>
+      </div>
+    </div>
+    <div class="card mb16">
+      <div class="ct">Most recent inspections with hazmat violations</div>
+      <div class="cs">WHERE hazmat_viol_total &gt; '0' · 30 most recent by insp_date</div>
+      <table class="tbl">
+        <thead><tr>
+          <th>Date</th><th>State</th><th>Carrier</th><th>DOT #</th>
+          <th>Level</th><th>OOS</th><th>Driver viol.</th><th>Vehicle viol.</th><th>Hazmat viol.</th><th>Hazmat OOS</th>
+        </tr></thead>
+        <tbody id="inspTable"></tbody>
+      </table>
+      <div class="csrc">FMCSA fx4q-ay7w — WHERE hazmat_viol_total>'0' ORDER BY insp_date DESC LIMIT 30</div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<div class="footer" style="align-items:center" id="footer" style="display:none">
+  <div>Sources: FMCSA Crash File (aayw-vxb3) · Company Census (az4n-8mr2) · Vehicle Inspection (fx4q-ay7w) · data.transportation.gov · 49 U.S.C. §390.5</div>
+  <div style="font-family:var(--mono)"><div style="width:52px;opacity:0.28;flex-shrink:0;line-height:0"><svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 4465.5 788.8"> <!-- Generator: Adobe Illustrator 29.1.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 142) --> <g> <path d="M652.4,377c-14.1-8.5-33-14.7-56.6-18.4-23.6-3.7-58.7-5.6-105.4-5.6h-214c-66.1,0-109.7-7.2-130.6-21.6-21-14.4-31.4-40.8-31.4-79.2s10.7-63.9,32.2-78c21.5-14.1,63.1-21.2,125-21.2h203.2c60.8,0,100.6,6.9,119.4,20.6,18.8,13.7,28.2,40.2,28.2,79.4v9.2h71.2v-17.2c0-28.8-3.3-52.7-9.8-71.8-6.5-19.1-16.6-34.5-30.2-46.2-16.8-13.9-40-23.6-69.6-29.2-29.6-5.6-81.3-8.4-155.2-8.4h-135.2c-97.6,0-164.7,12.3-201.4,37-36.7,24.7-55,67.7-55,129s16.1,102.3,48.2,127c32.1,24.7,87.9,37,167.4,37h251.6c53.1,0,88.1,7,105.2,21,17.1,14,25.6,39.8,25.6,77.4s-12.3,75.6-36.8,91.6c-24.5,16-77.2,24-158,24h-155.6c-67.2,0-113.1-7.3-137.6-22-24.5-14.7-36.8-40.7-36.8-78s.3-12.1.8-23.6c.3-4.8.5-8.7.8-11.6H40.8c-.3,1.6-.4,3.9-.4,6.8-.8,17.9-1.2,30.5-1.2,38,0,56,17,96.1,51,120.2,34,24.1,91,36.2,171,36.2h202c92.8,0,157-13.1,192.6-39.2,35.6-26.1,53.4-72.3,53.4-138.4s-4.3-72.8-13-94.4c-8.7-21.6-23.3-38.4-43.8-50.4Z"/> <path d="M1593.5,131c-18.9-14.9-44-25.6-75-32-31.1-6.4-78-9.6-140.7-9.6h-198.9c-62.7,0-109.6,3.2-140.7,9.6-31.1,6.4-56.1,17.1-75,32-21.1,16.8-36.3,39.9-45.6,69.2-9.3,29.3-14,68.8-14,118.4v162.4c0,45.3,4.7,81.9,14.2,109.6,9.5,27.7,24.9,50.1,46.2,67.2,19.2,15.2,44,25.9,74.4,32.2,30.4,6.3,77.5,9.4,141.3,9.4h198.1c64.3,0,111.6-3.1,141.9-9.4,30.3-6.3,54.9-17,73.8-32.2,20.5-16.3,35.6-38.8,45.2-67.6,9.6-28.8,14.4-66.4,14.4-112.8v-166c0-46.1-4.8-83.7-14.4-112.6-9.6-28.9-24.7-51.5-45.2-67.8ZM1573.1,460.2v20c0,31.2-1.7,54.2-5.2,69-3.5,14.8-9.2,27.5-17.2,38.2-11.8,15.5-28,26.5-48.8,33.2-20.8,6.7-50.4,10-88.9,10h-269.4c-38.4,0-68-3.3-88.9-10-20.8-6.7-37.1-17.7-48.8-33.2-8.5-11.2-14.5-24.5-18-39.8-3.5-15.3-5.2-40.9-5.2-76.6v-156.4c0-35.7,1.7-61.3,5.2-76.6,3.5-15.3,9.5-28.6,18-39.8,11.7-15.5,28-26.5,48.8-33.2,20.8-6.7,50.4-10,88.9-10h269.4c38.4,0,68,3.3,88.9,10,20.8,6.7,37.1,17.7,48.8,33.2,8,10.7,13.7,23.3,17.2,38,3.5,14.7,5.2,37.7,5.2,69.2v154.8Z"/> <polygon points="2522.3 624.2 1983.9 96.6 1867.5 96.6 1867.5 692.2 1941.5 692.2 1941.5 156.6 2487.9 692.2 2595.9 692.2 2595.9 96.6 2522.3 96.6 2522.3 624.2"/> <path d="M4428.3,309.8v-71.6c0-54.1-15.4-91.3-46.2-111.4-30.8-20.1-93.5-30.2-188.2-30.2h-425.2v64.8h449.2c53.3,0,88.7,6.7,106.2,20,17.5,13.3,26.2,40,26.2,80v28.4c0,40.3-8.7,67-26.2,80.2-17.5,13.2-52.9,19.8-106.2,19.8h-449.2v302.4h74v-233.6h361.2c62.1,0,101.7,7.1,118.6,21.2,16.9,14.1,25.4,40.7,25.4,79.6v132.8h74v-147.6c0-34.7-8.3-61.8-24.8-81.4-16.5-19.6-41.1-31.1-73.6-34.6,39.2-8.3,66.5-20.9,81.8-38,15.3-17.1,23-44,23-80.8Z"/> <polygon points="3231.1 96.6 3132.7 96.6 2787.1 692.2 2871.5 692.2 2983.6 498.2 2983.5 498.2 3182.7 155.8 3385.1 498.2 3384.9 498.2 3499.1 692.2 3577.5 692.2 3231.1 96.6"/> </g> </svg></div>&nbsp;&nbsp;Live SODA API · Fetched <span id="ft">—</span></div>
+</div>
+
+<div class="tt" id="tt">
+  <strong id="tt0"></strong>
+  <div class="ttr"><span id="ttl1">Crashes</span><span id="tt1"></span></div>
+  <div class="ttr"><span id="ttl2">Fatal</span><span id="tt2"></span></div>
+</div>
+
+<script>
+const CRASH  = 'https://data.transportation.gov/resource/aayw-vxb3.json';
+const CENSUS = 'https://data.transportation.gov/resource/az4n-8mr2.json';
+const INSP   = 'https://data.transportation.gov/resource/fx4q-ay7w.json';
+
+const ST={AL:'Alabama',AK:'Alaska',AZ:'Arizona',AR:'Arkansas',CA:'California',CO:'Colorado',
+  CT:'Connecticut',DE:'Delaware',FL:'Florida',GA:'Georgia',HI:'Hawaii',ID:'Idaho',
+  IL:'Illinois',IN:'Indiana',IA:'Iowa',KS:'Kansas',KY:'Kentucky',LA:'Louisiana',
+  ME:'Maine',MD:'Maryland',MA:'Massachusetts',MI:'Michigan',MN:'Minnesota',MS:'Mississippi',
+  MO:'Missouri',MT:'Montana',NE:'Nebraska',NV:'Nevada',NH:'New Hampshire',NJ:'New Jersey',
+  NM:'New Mexico',NY:'New York',NC:'North Carolina',ND:'North Dakota',OH:'Ohio',OK:'Oklahoma',
+  OR:'Oregon',PA:'Pennsylvania',RI:'Rhode Island',SC:'South Carolina',SD:'South Dakota',
+  TN:'Tennessee',TX:'Texas',UT:'Utah',VT:'Vermont',VA:'Virginia',WA:'Washington',
+  WV:'West Virginia',WI:'Wisconsin',WY:'Wyoming'};
+
+const CARGO={'1':'Van/enclosed box','2':'Flatbed','3':'Refrigerated','4':'Hopper/grain',
+  '5':'Tanker (non-haz)','6':'Tanker (hazmat)','7':'Dump','8':'Concrete mixer',
+  '9':'Auto transporter','10':'Container','11':'Log/lumber','12':'Livestock',
+  '13':'Other/unknown','14':'Not applicable','15':'Intermodal','98':'Not reported','99':'Unknown'};
+
+const INSP_LEVEL={'1':'Full (Level I)','2':'Walk-around (II)','3':'Driver only (III)',
+  '4':'Special (IV)','5':'Cargo only (V)','6':'Enhanced NAS (VI)'};
+
+const RATING_LABEL={'S':'Satisfactory','C':'Conditional','U':'Unsatisfactory','':'Not Rated'};
+
+const COLORS=['#e05555','#e87c3a','#d4a017','#3db87a','#3d8ef0','#a78bfa','#f472b6','#5a6a85','#e05555','#e87c3a','#3db87a','#3d8ef0','#d4a017','#a78bfa','#f472b6'];
+
+let RAW={}, charts={}, mapReady=false;
+let totalSteps=0, doneSteps=0;
+
+function tok(){return(document.getElementById('tok')?.value||'').trim()}
+function hdrs(){const h={};const t=tok();if(t)h['X-App-Token']=t;return h}
+
+async function q(base,params){
+  const url=new URL(base);
+  Object.entries(params).forEach(([k,v])=>url.searchParams.set(k,v));
+  const r=await fetch(url.toString(),{headers:hdrs()});
+  if(!r.ok){const txt=await r.text();throw new Error(`HTTP ${r.status}: ${txt.slice(0,200)}`)}
+  return r.json()
+}
+
+function addStep(id,label){
+  const el=document.createElement('div');
+  el.className='st';el.id='st-'+id;
+  el.innerHTML=`<span class="st-ic">·</span>${label}`;
+  document.getElementById('lsteps').appendChild(el);
+  totalSteps++;
+}
+function markStep(id,state){
+  const el=document.getElementById('st-'+id);if(!el)return;
+  el.className='st '+(state==='done'?'done':state==='go'?'go':'err');
+  el.querySelector('.st-ic').textContent=state==='done'?'✓':state==='go'?'→':'✗';
+  if(state==='done'){doneSteps++;document.getElementById('lbar').style.width=`${Math.round(doneSteps/totalSteps*100)}%`}
+}
+function setMsg(t){document.getElementById('lmsg').textContent=t}
+function setTabStatus(tab,state){
+  const btn=document.getElementById('tab-'+tab+'-btn');
+  const sp=document.getElementById('tab-'+tab+'-status');
+  if(!sp)return;
+  btn.classList.remove('loading','ready');
+  if(state==='loading'){btn.classList.add('loading');sp.textContent='⟳'}
+  else if(state==='ready'){btn.classList.add('ready');sp.textContent='✓'}
+}
+
+function mk(id,cfg){
+  if(charts[id]){charts[id].destroy();delete charts[id]}
+  const el=document.getElementById(id);if(el)charts[id]=new Chart(el,cfg)
+}
+const CO={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}};
+const GY={color:'rgba(255,255,255,0.05)'};
+const TS={color:'#5a6a85',font:{size:10,family:'IBM Plex Mono'}};
+
+function bars(elId, data, labelKey, countKey, colors){
+  const max=+(data[0]?.[countKey]||1);
+  document.getElementById(elId).innerHTML=data.map((r,i)=>{
+    const v=+r[countKey]||0;
+    const lbl=r[labelKey]||'Unknown';
+    return `<div class="brow"><div class="blbl">${lbl}</div>
+      <div class="bbg"><div class="bfill" style="width:${(v/max*100).toFixed(0)}%;background:${colors[i%colors.length]}"></div></div>
+      <div class="bpct">${v>=1000?(v/1000).toFixed(0)+'K':v}</div></div>`;
+  }).join('')
+}
+
+// ── FETCH ALL ─────────────────────────────────────────────────────────────
+async function fetchAll(){
+  document.getElementById('ldr').classList.remove('out');
+  document.getElementById('main').style.display='none';
+  document.getElementById('footer').style.display='none';
+  document.getElementById('errbox').classList.remove('on');
+  document.getElementById('lsteps').innerHTML='';
+  totalSteps=0; doneSteps=0; RAW={};
+
+  const curYr=new Date().getFullYear();
+  const years=[];for(let y=2005;y<=curYr;y++)years.push(y);
+  const recentYrs=years.slice(-5);
+
+  // Register all steps
+  addStep('crash-states','Crashes — state breakdown');
+  addStep('crash-cargo','Crashes — cargo types');
+  addStep('crash-sev','Crashes — severity counts');
+  addStep('crash-hazstate','Crashes — hazmat by state');
+  addStep('crash-recent','Crashes — recent records');
+  years.forEach(y=>addStep(`cr-${y}`  ,`Crashes ${y}`));
+  years.forEach(y=>addStep(`haz-${y}` ,`Hazmat ${y}`));
+  years.forEach(y=>addStep(`fat-${y}` ,`Fatal ${y}`));
+  recentYrs.forEach(y=>addStep(`veh-${y}`,`Veh split ${y}`));
+  addStep('cen-total' ,'Census — total count');
+  addStep('cen-state' ,'Census — by state');
+  addStep('cen-rating','Census — safety ratings');
+  addStep('cen-op'    ,'Census — operation type');
+  addStep('cen-hm'    ,'Census — hazmat by state');
+  addStep('cen-recent','Census — recent carriers');
+  addStep('ins-total' ,'Inspect — total count');
+  addStep('ins-state' ,'Inspect — by state');
+  addStep('ins-level' ,'Inspect — by level');
+  addStep('ins-oos'   ,'Inspect — OOS by state');
+  addStep('ins-hazv'  ,'Inspect — hazmat viol by state');
+  addStep('ins-ci'    ,'Inspect — CI status');
+  addStep('ins-recent','Inspect — recent hazmat');
+  addStep('ins-kpis'  ,'Inspect — KPI counts');
+
+  try{
+    // ── CRASHES ──────────────────────────────────────────────────────────
+    setMsg('Loading crash data...'); setTabStatus('crashes','loading');
+
+    const [crashStates,crashCargo,sevFat,sevInj,sevTow,sevAll,crashHazState,crashRecent]=await Promise.all([
+      q(CRASH,{'$select':'state,COUNT(*) AS cnt','$where':"federal_recordable='Y' AND state IS NOT NULL AND state!=''",
+        '$group':'state','$order':'cnt DESC','$limit':'60'}).then(r=>{markStep('crash-states','done');return r}).catch(()=>{markStep('crash-states','err');return[]}),
+      q(CRASH,{'$select':'cargo_body_type_id,COUNT(*) AS cnt','$where':"federal_recordable='Y' AND cargo_body_type_id IS NOT NULL",
+        '$group':'cargo_body_type_id','$order':'cnt DESC','$limit':'15'}).then(r=>{markStep('crash-cargo','done');return r}).catch(()=>{markStep('crash-cargo','err');return[]}),
+      q(CRASH,{'$select':'COUNT(*) AS cnt','$where':"fatalities!='0' AND federal_recordable='Y'"}).then(r=>{return +r[0]?.cnt||0}).catch(()=>0),
+      q(CRASH,{'$select':'COUNT(*) AS cnt','$where':"injuries!='0' AND federal_recordable='Y'"}).then(r=>{return +r[0]?.cnt||0}).catch(()=>0),
+      q(CRASH,{'$select':'COUNT(*) AS cnt','$where':"tow_away='Y' AND federal_recordable='Y'"}).then(r=>{return +r[0]?.cnt||0}).catch(()=>0),
+      q(CRASH,{'$select':'COUNT(*) AS cnt','$where':"federal_recordable='Y'"}).then(r=>{markStep('crash-sev','done');return +r[0]?.cnt||0}).catch(()=>{markStep('crash-sev','err');return 0}),
+      q(CRASH,{'$select':'state,COUNT(*) AS cnt','$where':"hazmat_released='Y' AND state IS NOT NULL AND state!=''",
+        '$group':'state','$order':'cnt DESC','$limit':'10'}).then(r=>{markStep('crash-hazstate','done');return r}).catch(()=>{markStep('crash-hazstate','err');return[]}),
+      q(CRASH,{'$select':'report_date,state,city,location,dot_number,crash_carrier_name,truck_bus_ind,vehicles_in_accident,fatalities,injuries,tow_away,hazmat_released,cargo_body_type_id',
+        '$where':"hazmat_released='Y'",'$order':'report_date DESC','$limit':'50'}).then(r=>{markStep('crash-recent','done');return r}).catch(()=>{markStep('crash-recent','err');return[]}),
+    ]);
+
+    RAW.crashStates=crashStates; RAW.crashCargo=crashCargo;
+    RAW.sev={fatal:sevFat,inj:sevInj,tow:sevTow,all:sevAll};
+    RAW.crashHazState=crashHazState; RAW.crashRecent=crashRecent;
+
+    // Per-year crash data in batches of 4
+    const yearResults=[];
+    for(let i=0;i<years.length;i+=4){
+      const batch=years.slice(i,i+4);
+      const results=await Promise.all(batch.map(async yr=>{
+        const {from,to}={from:`${yr}0101`,to:`${yr}1231`};
+        const [tot,haz,fat]=await Promise.all([
+          q(CRASH,{'$select':'COUNT(*) AS cnt','$where':`report_date>='${from}' AND report_date<='${to}' AND federal_recordable='Y'`}).then(r=>{markStep(`cr-${yr}`,'done');return +r[0]?.cnt||0}).catch(()=>{markStep(`cr-${yr}`,'err');return 0}),
+          q(CRASH,{'$select':'COUNT(*) AS cnt','$where':`report_date>='${from}' AND report_date<='${to}' AND hazmat_released='Y'`}).then(r=>{markStep(`haz-${yr}`,'done');return +r[0]?.cnt||0}).catch(()=>{markStep(`haz-${yr}`,'err');return 0}),
+          q(CRASH,{'$select':'COUNT(*) AS cnt','$where':`report_date>='${from}' AND report_date<='${to}' AND fatalities!='0'`}).then(r=>{markStep(`fat-${yr}`,'done');return +r[0]?.cnt||0}).catch(()=>{markStep(`fat-${yr}`,'err');return 0}),
+        ]);
+        return {yr,tot,haz,fat};
+      }));
+      yearResults.push(...results);
+    }
+    RAW.yearTrend=yearResults.sort((a,b)=>a.yr-b.yr);
+
+    // Truck vs bus recent 5 years
+    const vehResults=await Promise.all(recentYrs.flatMap(yr=>{
+      const from=`${yr}0101`,to=`${yr}1231`;
+      return [
+        q(CRASH,{'$select':'COUNT(*) AS cnt','$where':`report_date>='${from}' AND report_date<='${to}' AND truck_bus_ind='T' AND federal_recordable='Y'`}).then(r=>{markStep(`veh-${yr}`,'done');return +r[0]?.cnt||0}).catch(()=>0),
+        q(CRASH,{'$select':'COUNT(*) AS cnt','$where':`report_date>='${from}' AND report_date<='${to}' AND truck_bus_ind='B' AND federal_recordable='Y'`}).then(r=>+r[0]?.cnt||0).catch(()=>0),
+      ];
+    }));
+    RAW.veh=recentYrs.map((yr,i)=>({yr,T:vehResults[i*2],B:vehResults[i*2+1]}));
+
+    setTabStatus('crashes','ready');
+    renderCrashes();
+
+    // ── CENSUS ───────────────────────────────────────────────────────────
+    setMsg('Loading carrier census...'); setTabStatus('census','loading');
+
+    const [cenTotal,cenState,cenRating,cenOp,cenHM,cenRecent]=await Promise.all([
+      q(CENSUS,{'$select':'COUNT(*) AS cnt'}).then(r=>{markStep('cen-total','done');return +r[0]?.cnt||0}).catch(()=>{markStep('cen-total','err');return 0}),
+      q(CENSUS,{'$select':'phy_state,COUNT(*) AS cnt','$where':"phy_state IS NOT NULL AND phy_state!=''",
+        '$group':'phy_state','$order':'cnt DESC','$limit':'20'}).then(r=>{markStep('cen-state','done');return r}).catch(()=>{markStep('cen-state','err');return[]}),
+      q(CENSUS,{'$select':'safety_rating,COUNT(*) AS cnt','$group':'safety_rating','$order':'cnt DESC','$limit':'10'}).then(r=>{markStep('cen-rating','done');return r}).catch(()=>{markStep('cen-rating','err');return[]}),
+      q(CENSUS,{'$select':'carrier_operation,COUNT(*) AS cnt','$group':'carrier_operation','$order':'cnt DESC','$limit':'10'}).then(r=>{markStep('cen-op','done');return r}).catch(()=>{markStep('cen-op','err');return[]}),
+      q(CENSUS,{'$select':'phy_state,COUNT(*) AS cnt','$where':"hm_ind='A' AND phy_state IS NOT NULL AND phy_state!=''",
+        '$group':'phy_state','$order':'cnt DESC','$limit':'10'}).then(r=>{markStep('cen-hm','done');return r}).catch(()=>{markStep('cen-hm','err');return[]}),
+      q(CENSUS,{'$select':'dot_number,legal_name,phy_state,carrier_operation,safety_rating,hm_ind,power_units',
+        '$order':'add_date DESC','$limit':'30'}).then(r=>{markStep('cen-recent','done');return r}).catch(()=>{markStep('cen-recent','err');return[]}),
+    ]);
+
+    RAW.cenTotal=cenTotal; RAW.cenState=cenState; RAW.cenRating=cenRating;
+    RAW.cenOp=cenOp; RAW.cenHM=cenHM; RAW.cenRecent=cenRecent;
+
+    setTabStatus('census','ready');
+    renderCensus();
+
+    // ── INSPECTIONS ───────────────────────────────────────────────────────
+    setMsg('Loading inspection data...'); setTabStatus('inspect','loading');
+
+    const [insTot,insState,insLevel,insOosState,insHazState2,insCIStatus,insRecent,
+      insOosCnt,insHazViolCnt,insHazOOSCnt]=await Promise.all([
+      q(INSP,{'$select':'COUNT(*) AS cnt'}).then(r=>{markStep('ins-total','done');return +r[0]?.cnt||0}).catch(()=>{markStep('ins-total','err');return 0}),
+      q(INSP,{'$select':'report_state,COUNT(*) AS cnt','$where':"report_state IS NOT NULL AND report_state!=''",
+        '$group':'report_state','$order':'cnt DESC','$limit':'20'}).then(r=>{markStep('ins-state','done');return r}).catch(()=>{markStep('ins-state','err');return[]}),
+      q(INSP,{'$select':'insp_level_id,COUNT(*) AS cnt','$where':"insp_level_id IS NOT NULL",
+        '$group':'insp_level_id','$order':'cnt DESC','$limit':'10'}).then(r=>{markStep('ins-level','done');return r}).catch(()=>{markStep('ins-level','err');return[]}),
+      q(INSP,{'$select':'report_state,COUNT(*) AS cnt','$where':"oos_total>'0' AND report_state IS NOT NULL",
+        '$group':'report_state','$order':'cnt DESC','$limit':'10'}).then(r=>{markStep('ins-oos','done');return r}).catch(()=>{markStep('ins-oos','err');return[]}),
+      q(INSP,{'$select':'report_state,COUNT(*) AS cnt','$where':"hazmat_viol_total>'0' AND report_state IS NOT NULL",
+        '$group':'report_state','$order':'cnt DESC','$limit':'10'}).then(r=>{markStep('ins-hazv','done');return r}).catch(()=>{markStep('ins-hazv','err');return[]}),
+      q(INSP,{'$select':'ci_status_code,COUNT(*) AS cnt','$where':"ci_status_code IS NOT NULL",
+        '$group':'ci_status_code','$order':'cnt DESC','$limit':'10'}).then(r=>{markStep('ins-ci','done');return r}).catch(()=>{markStep('ins-ci','err');return[]}),
+      q(INSP,{'$select':'insp_date,report_state,insp_carrier_name,dot_number,insp_level_id,oos_total,driver_viol_total,vehicle_viol_total,hazmat_viol_total,hazmat_oos_total',
+        '$where':"hazmat_viol_total>'0'",'$order':'insp_date DESC','$limit':'30'}).then(r=>{markStep('ins-recent','done');return r}).catch(()=>{markStep('ins-recent','err');return[]}),
+      q(INSP,{'$select':'COUNT(*) AS cnt','$where':"oos_total>'0'"}).then(r=>+r[0]?.cnt||0).catch(()=>0),
+      q(INSP,{'$select':'COUNT(*) AS cnt','$where':"hazmat_viol_total>'0'"}).then(r=>+r[0]?.cnt||0).catch(()=>0),
+      q(INSP,{'$select':'COUNT(*) AS cnt','$where':"hazmat_oos_total>'0'"}).then(r=>{markStep('ins-kpis','done');return +r[0]?.cnt||0}).catch(()=>{markStep('ins-kpis','err');return 0}),
+    ]);
+
+    RAW.insTot=insTot; RAW.insState=insState; RAW.insLevel=insLevel;
+    RAW.insOosState=insOosState; RAW.insHazState2=insHazState2; RAW.insCIStatus=insCIStatus;
+    RAW.insRecent=insRecent; RAW.insOosCnt=insOosCnt; RAW.insHazViolCnt=insHazViolCnt; RAW.insHazOOSCnt=insHazOOSCnt;
+
+    setTabStatus('inspect','ready');
+    renderInspect();
+
+    document.getElementById('ts').textContent='Updated '+new Date().toLocaleTimeString();
+    document.getElementById('ft').textContent=new Date().toLocaleString();
+
+    setTimeout(()=>{
+      document.getElementById('ldr').classList.add('out');
+      document.getElementById('main').style.display='block';
+      document.getElementById('footer').style.display='flex';
+    },400);
+
+  }catch(e){
+    document.getElementById('ldr').classList.add('out');
+    document.getElementById('errbox').classList.add('on');
+    document.getElementById('errtitle').textContent='API error: '+e.message.slice(0,150);
+    document.getElementById('errmsg').textContent='Open browser console (F12) for details.';
+    console.error(e);
+  }
+}
+
+// ── RENDER CRASHES ────────────────────────────────────────────────────────
+function renderCrashes(){
+  const trend=RAW.yearTrend||[];
+  const yrs=trend.map(r=>String(r.yr));
+  const totAll=+RAW.sev?.all||0;
+  const totHaz=trend.reduce((s,r)=>s+r.haz,0);
+
+  document.getElementById('kTot').textContent=totAll.toLocaleString();
+  document.getElementById('kFat').textContent=(+RAW.sev?.fatal||0).toLocaleString();
+  document.getElementById('kFatSub').textContent=((+RAW.sev?.fatal/Math.max(totAll,1))*100).toFixed(2)+'% of crashes';
+  document.getElementById('kInj').textContent=(+RAW.sev?.inj||0).toLocaleString();
+  document.getElementById('kInjSub').textContent=((+RAW.sev?.inj/Math.max(totAll,1))*100).toFixed(2)+'% of crashes';
+  document.getElementById('kHaz').textContent=totHaz.toLocaleString();
+  document.getElementById('kHazSub').textContent=((totHaz/Math.max(totAll,1))*100).toFixed(2)+'% of crashes';
+  document.getElementById('kTow').textContent=(+RAW.sev?.tow||0).toLocaleString();
+
+  mk('cTrend',{data:{labels:yrs,datasets:[
+    {type:'bar',data:trend.map(r=>r.tot),backgroundColor:'rgba(232,124,58,0.3)',yAxisID:'y',borderRadius:2,order:3},
+    {type:'line',data:trend.map(r=>r.fat),borderColor:'#e05555',backgroundColor:'rgba(224,85,85,0.06)',tension:0.4,fill:true,pointRadius:2,pointBackgroundColor:'#e05555',yAxisID:'y1',borderWidth:1.5,order:1},
+    {type:'line',data:trend.map(r=>r.haz),borderColor:'#3db87a',tension:0.4,pointRadius:2,pointBackgroundColor:'#3db87a',yAxisID:'y1',borderWidth:1.5,order:2},
+  ]},options:{...CO,scales:{
+    x:{grid:{display:false},ticks:{...TS,maxTicksLimit:15}},
+    y:{grid:GY,ticks:{...TS,callback:v=>v>=1000?(v/1000).toFixed(0)+'K':v},position:'left'},
+    y1:{grid:{display:false},ticks:TS,position:'right'}
+  }}});
+
+  const top15=(RAW.crashStates||[]).slice(0,15);
+  mk('cState',{type:'bar',indexAxis:'y',data:{labels:top15.map(r=>ST[r.state]||r.state),
+    datasets:[{data:top15.map(r=>+r.cnt||0),backgroundColor:top15.map((_,i)=>`hsla(${210+i*7},60%,${52-i}%,0.85)`),borderRadius:2}]},
+    options:{...CO,scales:{x:{grid:GY,ticks:{...TS,callback:v=>v>=1000?(v/1000).toFixed(0)+'K':v}},y:{grid:{display:false},ticks:TS}}}});
+
+  mk('cHaz',{type:'line',data:{labels:yrs,datasets:[{data:trend.map(r=>r.haz),borderColor:'#e05555',
+    backgroundColor:'rgba(224,85,85,0.08)',tension:0.4,fill:true,pointRadius:2.5,pointBackgroundColor:'#e05555',borderWidth:2}]},
+    options:{...CO,scales:{x:{grid:{display:false},ticks:{...TS,maxTicksLimit:12}},y:{grid:GY,ticks:TS}}}});
+
+  const svF=+RAW.sev?.fatal||0,svI=+RAW.sev?.inj||0,svT=+RAW.sev?.tow||0;
+  const svO=Math.max(0,(+RAW.sev?.all||0)-svF-svI-svT);
+  mk('cSev',{type:'doughnut',data:{labels:['Fatal','Injury only','Tow-away','Other'],
+    datasets:[{data:[svF,svI,svT,svO],backgroundColor:['#e05555','#d4a017','#3d8ef0','#2a3545'],borderColor:'#111620',borderWidth:2}]},
+    options:{...CO,cutout:'55%',plugins:{legend:{display:true,position:'right',labels:{color:'#7a8fa8',font:{size:10,family:'IBM Plex Mono'},boxWidth:9,padding:8}}}}});
+
+  const cMax=+((RAW.crashCargo||[])[0]?.cnt||1);
+  document.getElementById('cargoBars').innerHTML=(RAW.crashCargo||[]).slice(0,9).map((r,i)=>{
+    const v=+r.cnt||0;
+    return `<div class="brow"><div class="blbl">${CARGO[r.cargo_body_type_id]||`Type ${r.cargo_body_type_id}`}</div>
+      <div class="bbg"><div class="bfill" style="width:${(v/cMax*100).toFixed(0)}%;background:${COLORS[i]}"></div></div>
+      <div class="bpct">${v>=1000?(v/1000).toFixed(0)+'K':v}</div></div>`;
+  }).join('');
+
+  bars('hazStateBars',RAW.crashHazState||[],'state','cnt',COLORS);
+
+  const veh=RAW.veh||[];
+  mk('cVeh',{type:'bar',data:{labels:veh.map(r=>String(r.yr)),datasets:[
+    {label:'Trucks',data:veh.map(r=>r.T),backgroundColor:'rgba(232,124,58,0.7)',borderRadius:2,stack:'v'},
+    {label:'Buses',data:veh.map(r=>r.B),backgroundColor:'rgba(61,142,240,0.7)',borderRadius:2,stack:'v'},
+  ]},options:{...CO,scales:{x:{stacked:true,grid:{display:false},ticks:TS},y:{stacked:true,grid:GY,ticks:{...TS,callback:v=>v>=1000?(v/1000).toFixed(0)+'K':v}}},
+    plugins:{legend:{display:true,position:'top',labels:{color:'#7a8fa8',font:{size:10,family:'IBM Plex Mono'},boxWidth:9,padding:8}}}}});
+
+  // Recent table
+  document.getElementById('recTbl').innerHTML=(RAW.crashRecent||[]).map(r=>{
+    const d=r.report_date||'';
+    const ds=d.length>=8?`${d.slice(4,6)}/${d.slice(6,8)}/${d.slice(0,4)}`:d;
+    return `<tr>
+      <td style="font-family:var(--mono);font-size:10px;color:var(--mu)">${ds}</td>
+      <td><span class="pill p-st">${r.state||'—'}</span></td>
+      <td style="font-size:11px;color:var(--mu2)">${(r.city||r.location||'—').slice(0,14)}</td>
+      <td style="font-size:11px;font-weight:500">${(r.crash_carrier_name||'—').slice(0,20)}</td>
+      <td style="font-family:var(--mono);font-size:10px;color:var(--mu)">${r.dot_number||'—'}</td>
+      <td>${r.truck_bus_ind==='B'?'<span class="pill p-bus">Bus</span>':'<span class="pill p-tr">Truck</span>'}</td>
+      <td><span class="pill p-haz">Released</span></td>
+      <td style="font-family:var(--mono);color:var(--mu)">${r.vehicles_in_accident||'—'}</td>
+      <td style="font-family:var(--mono);color:${r.fatalities!='0'&&r.fatalities?'var(--red)':'var(--mu)'}">${r.fatalities||'—'}</td>
+      <td style="font-family:var(--mono);color:${r.injuries!='0'&&r.injuries?'var(--am)':'var(--mu)'}">${r.injuries||'—'}</td>
+      <td style="font-family:var(--mono);color:var(--mu)">${r.tow_away==='Y'?'Yes':'—'}</td>
+    </tr>`;
+  }).join('');
+
+  if(mapReady)updateMap();
+}
+
+// ── RENDER CENSUS ─────────────────────────────────────────────────────────
+function renderCensus(){
+  const opMap={A:0,B:0,C:0};
+  (RAW.cenOp||[]).forEach(r=>{if(opMap[r.carrier_operation]!==undefined)opMap[r.carrier_operation]=+r.cnt||0});
+  document.getElementById('cTot').textContent=(+RAW.cenTotal||0).toLocaleString();
+  document.getElementById('cA').textContent=opMap.A.toLocaleString();
+  document.getElementById('cB').textContent=opMap.B.toLocaleString();
+  document.getElementById('cC').textContent=opMap.C.toLocaleString();
+
+  const cenTop=(RAW.cenState||[]).slice(0,15);
+  mk('cCensusState',{type:'bar',indexAxis:'y',data:{labels:cenTop.map(r=>ST[r.phy_state]||r.phy_state),
+    datasets:[{data:cenTop.map(r=>+r.cnt||0),backgroundColor:cenTop.map((_,i)=>`hsla(${180+i*8},55%,${50-i}%,0.85)`),borderRadius:2}]},
+    options:{...CO,scales:{x:{grid:GY,ticks:{...TS,callback:v=>v>=1000?(v/1000).toFixed(0)+'K':v}},y:{grid:{display:false},ticks:TS}}}});
+
+  // Safety rating donut
+  const ratingData=(RAW.cenRating||[]).map(r=>({label:RATING_LABEL[r.safety_rating]||r.safety_rating||'Not Rated',cnt:+r.cnt||0}));
+  mk('cRating',{type:'doughnut',data:{
+    labels:ratingData.map(r=>r.label),
+    datasets:[{data:ratingData.map(r=>r.cnt),backgroundColor:['#3db87a','#d4a017','#e05555','#5a6a85','#3d8ef0'],borderColor:'#111620',borderWidth:2}]},
+    options:{...CO,cutout:'52%',plugins:{legend:{display:true,position:'right',labels:{color:'#7a8fa8',font:{size:10,family:'IBM Plex Mono'},boxWidth:9,padding:8}}}}});
+
+  // Hazmat by state bars
+  document.getElementById('hmStateBars').innerHTML=(RAW.cenHM||[]).map((r,i)=>{
+    const v=+r.cnt||0, max=+((RAW.cenHM||[])[0]?.cnt||1);
+    return `<div class="brow"><div class="blbl">${ST[r.phy_state]||r.phy_state}</div>
+      <div class="bbg"><div class="bfill" style="width:${(v/max*100).toFixed(0)}%;background:${COLORS[i]}"></div></div>
+      <div class="bpct">${v>=1000?(v/1000).toFixed(0)+'K':v}</div></div>`;
+  }).join('');
+
+  // Operation type bars
+  const opLabels={'A':'Interstate (A)','B':'Intrastate HM (B)','C':'Intrastate non-HM (C)','':`Unknown`};
+  document.getElementById('opBars').innerHTML=(RAW.cenOp||[]).map((r,i)=>{
+    const v=+r.cnt||0, max=+((RAW.cenOp||[])[0]?.cnt||1);
+    return `<div class="brow"><div class="blbl">${opLabels[r.carrier_operation]||r.carrier_operation}</div>
+      <div class="bbg"><div class="bfill" style="width:${(v/max*100).toFixed(0)}%;background:${COLORS[i]}"></div></div>
+      <div class="bpct">${v>=1000?(v/1000).toFixed(0)+'K':v}</div></div>`;
+  }).join('');
+
+  // Recent carriers table
+  const ratingPill=(s)=>{
+    if(s==='S')return'<span class="pill p-sat">Satisfactory</span>';
+    if(s==='C')return'<span class="pill p-cond">Conditional</span>';
+    if(s==='U')return'<span class="pill p-unsat">Unsatisfactory</span>';
+    return'<span class="pill p-nr">Not Rated</span>';
+  };
+  document.getElementById('censusTable').innerHTML=(RAW.cenRecent||[]).map(r=>`<tr>
+    <td style="font-family:var(--mono);font-size:10px;color:var(--mu)">${r.dot_number||'—'}</td>
+    <td style="font-size:11px;font-weight:500">${(r.legal_name||'—').slice(0,24)}</td>
+    <td><span class="pill p-st">${r.phy_state||'—'}</span></td>
+    <td style="font-family:var(--mono);font-size:10px;color:var(--mu)">${r.carrier_operation||'—'}</td>
+    <td>${ratingPill(r.safety_rating)}</td>
+    <td style="font-family:var(--mono);color:${r.hm_ind==='A'?'var(--am)':'var(--mu)'}">${r.hm_ind==='A'?'Yes':'—'}</td>
+    <td style="font-family:var(--mono);color:var(--mu)">${r.power_units||'—'}</td>
+  </tr>`).join('');
+}
+
+// ── RENDER INSPECTIONS ────────────────────────────────────────────────────
+function renderInspect(){
+  document.getElementById('iTot').textContent=(+RAW.insTot||0).toLocaleString();
+  document.getElementById('iOOS').textContent=(+RAW.insOosCnt||0).toLocaleString();
+  document.getElementById('iHazViol').textContent=(+RAW.insHazViolCnt||0).toLocaleString();
+  document.getElementById('iHazOOS').textContent=(+RAW.insHazOOSCnt||0).toLocaleString();
+
+  const top15i=(RAW.insState||[]).filter(r=>r.report_state&&r.report_state.length===2).slice(0,15);
+  mk('iStateChart',{type:'bar',indexAxis:'y',data:{labels:top15i.map(r=>ST[r.report_state]||r.report_state),
+    datasets:[{data:top15i.map(r=>+r.cnt||0),backgroundColor:top15i.map((_,i)=>`hsla(${240+i*7},55%,${52-i}%,0.85)`),borderRadius:2}]},
+    options:{...CO,scales:{x:{grid:GY,ticks:{...TS,callback:v=>v>=1000?(v/1000).toFixed(0)+'K':v}},y:{grid:{display:false},ticks:TS}}}});
+
+  const levData=(RAW.insLevel||[]).map(r=>({label:INSP_LEVEL[r.insp_level_id]||`Level ${r.insp_level_id}`,cnt:+r.cnt||0}));
+  mk('iLevelChart',{type:'doughnut',data:{labels:levData.map(r=>r.label),
+    datasets:[{data:levData.map(r=>r.cnt),backgroundColor:['#3d8ef0','#3db87a','#d4a017','#e87c3a','#a78bfa','#e05555'],borderColor:'#111620',borderWidth:2}]},
+    options:{...CO,cutout:'52%',plugins:{legend:{display:true,position:'right',labels:{color:'#7a8fa8',font:{size:10,family:'IBM Plex Mono'},boxWidth:9,padding:6}}}}});
+
+  // OOS by state bars — exclude 'US' federal entries
+  const oosFiltered=(RAW.insOosState||[]).filter(r=>r.report_state&&r.report_state!=='US'&&r.report_state.length===2).slice(0,10);
+  const oosMax=+(oosFiltered[0]?.cnt||1);
+  document.getElementById('oosStateBars').innerHTML=oosFiltered.map((r,i)=>{
+    const v=+r.cnt||0;
+    return `<div class="brow"><div class="blbl">${ST[r.report_state]||r.report_state}</div>
+      <div class="bbg"><div class="bfill" style="width:${(v/oosMax*100).toFixed(0)}%;background:${COLORS[i]}"></div></div>
+      <div class="bpct">${v>=1000?(v/1000).toFixed(0)+'K':v}</div></div>`;
+  }).join('');
+
+  const hazFiltered=(RAW.insHazState2||[]).filter(r=>r.report_state&&r.report_state!=='US'&&r.report_state.length===2).slice(0,10);
+  const hazMax=+(hazFiltered[0]?.cnt||1);
+  document.getElementById('hazViolBars').innerHTML=hazFiltered.map((r,i)=>{
+    const v=+r.cnt||0;
+    return `<div class="brow"><div class="blbl">${ST[r.report_state]||r.report_state}</div>
+      <div class="bbg"><div class="bfill" style="width:${(v/hazMax*100).toFixed(0)}%;background:${COLORS[i]}"></div></div>
+      <div class="bpct">${v>=1000?(v/1000).toFixed(0)+'K':v}</div></div>`;
+  }).join('');
+
+  const ciMax=+((RAW.insCIStatus||[])[0]?.cnt||1);
+  document.getElementById('ciStatusBars').innerHTML=(RAW.insCIStatus||[]).slice(0,8).map((r,i)=>{
+    const v=+r.cnt||0;
+    return `<div class="brow"><div class="blbl">${r.ci_status_code||'Unknown'}</div>
+      <div class="bbg"><div class="bfill" style="width:${(v/ciMax*100).toFixed(0)}%;background:${COLORS[i]}"></div></div>
+      <div class="bpct">${v>=1000?(v/1000).toFixed(0)+'K':v}</div></div>`;
+  }).join('');
+
+  // Inspection table
+  document.getElementById('inspTable').innerHTML=(RAW.insRecent||[]).map(r=>{
+    const d=r.insp_date||'';
+    const ds=d.length>=8?`${d.slice(4,6)}/${d.slice(6,8)}/${d.slice(0,4)}`:d.slice(0,10);
+    return `<tr>
+      <td style="font-family:var(--mono);font-size:10px;color:var(--mu)">${ds}</td>
+      <td><span class="pill p-st">${r.report_state||'—'}</span></td>
+      <td style="font-size:11px;font-weight:500">${(r.insp_carrier_name||'—').slice(0,22)}</td>
+      <td style="font-family:var(--mono);font-size:10px;color:var(--mu)">${r.dot_number||'—'}</td>
+      <td style="font-family:var(--mono);font-size:10px;color:var(--mu)">${INSP_LEVEL[r.insp_level_id]||r.insp_level_id||'—'}</td>
+      <td style="font-family:var(--mono);color:${+r.oos_total>0?'var(--red)':'var(--mu)'}">${r.oos_total||'—'}</td>
+      <td style="font-family:var(--mono);color:var(--mu)">${r.driver_viol_total||'—'}</td>
+      <td style="font-family:var(--mono);color:var(--mu)">${r.vehicle_viol_total||'—'}</td>
+      <td style="font-family:var(--mono);color:${+r.hazmat_viol_total>0?'var(--am)':'var(--mu)'}">${r.hazmat_viol_total||'—'}</td>
+      <td style="font-family:var(--mono);color:${+r.hazmat_oos_total>0?'var(--red)':'var(--mu)'}">${r.hazmat_oos_total||'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── MAP ───────────────────────────────────────────────────────────────────
+function updateMap(){
+  const byName={};
+  (RAW.crashStates||[]).forEach(r=>{if(ST[r.state])byName[ST[r.state]]=+r.cnt||0});
+  const max=Math.max(...Object.values(byName),1);
+  const pal=['#0d1520','#1c2e10','#2d4a1a','#456e28','#5e9238','#e8a020','#f0c040'];
+  const color=d3.scaleQuantize([0,max],pal);
+  const tt=document.getElementById('tt');
+  d3.select('#map').selectAll('path.mp')
+    .attr('fill',d=>{const v=byName[d.properties.name];return v?color(v):'#181f2e'})
+    .on('mousemove',function(ev,d){
+      const v=byName[d.properties.name]||0;if(!v)return;
+      tt.style.display='block';
+      tt.style.left=(ev.clientX+14)+'px';tt.style.top=(ev.clientY-10)+'px';
+      document.getElementById('tt0').textContent=d.properties.name;
+      document.getElementById('ttl1').textContent='Total crashes';
+      document.getElementById('tt1').textContent=v.toLocaleString();
+      document.getElementById('ttl2').textContent='State';
+      document.getElementById('tt2').textContent=d.properties.name.slice(0,2).toUpperCase();
+      d3.select(this).attr('stroke','rgba(255,255,255,0.4)').attr('stroke-width',1.3);
+    })
+    .on('mouseleave',function(){
+      tt.style.display='none';
+      d3.select(this).attr('stroke','rgba(255,255,255,0.07)').attr('stroke-width',0.5);
+    });
+  document.getElementById('mleg').innerHTML=pal.map(c=>`<div style="flex:1;background:${c}"></div>`).join('');
+}
+
+function initMap(){
+  const proj=d3.geoAlbersUsa().scale(1020).translate([480,300]);
+  const path=d3.geoPath(proj);
+  d3.json('https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json').then(us=>{
+    const features=topojson.feature(us,us.objects.states).features;
+    mapReady=true;
+    d3.select('#map').selectAll('path.mp').data(features).join('path')
+      .attr('class','mp').attr('d',path)
+      .attr('stroke','rgba(255,255,255,0.07)').attr('stroke-width',0.5)
+      .attr('fill','#181f2e').style('cursor','pointer');
+    d3.select('#map').append('path')
+      .datum(topojson.mesh(us,us.objects.states,(a,b)=>a!==b))
+      .attr('d',path).attr('fill','none')
+      .attr('stroke','rgba(255,255,255,0.04)').attr('stroke-width',0.5);
+    if(Object.keys(RAW).length>2)updateMap();
+  });
+}
+
+// ── TAB SWITCHER ──────────────────────────────────────────────────────────
+function switchTab(id,btn){
+  document.querySelectorAll('.tabpanel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tablink').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  btn.classList.add('active');
+}
+
+function reload(){fetchAll()}
+initMap();
+fetchAll();
+</script>
+</body>
+</html>

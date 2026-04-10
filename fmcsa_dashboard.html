@@ -412,6 +412,52 @@ canvas{position:relative;z-index:1}
       </table>
       <div class="csrc">FMCSA fx4q-ay7w — WHERE hazmat_viol_total>'0' ORDER BY insp_date DESC LIMIT 30</div>
     </div>
+
+      <!-- ── OOS BREAKDOWN ── -->
+      <div class="sec" style="margin-top:28px"><div class="sec-line"></div><div class="sec-label">Out-of-Service breakdown — 876r-jsdb violations file · 12.9M records</div><div class="sec-line"></div></div>
+
+      <div class="krow4" style="margin-bottom:24px">
+        <div class="kpi"><div class="klbl">Total OOS violations</div><div class="kval" style="color:var(--red)" id="oTot">—</div><div class="ksub">out_of_service_indicator=Y</div></div>
+        <div class="kpi"><div class="klbl">OOS rate</div><div class="kval" style="color:var(--am)" id="oRate">—</div><div class="ksub">of all violations in file</div></div>
+        <div class="kpi"><div class="klbl">Top OOS regulation</div><div class="kval" style="font-size:15px;line-height:1.2" id="oTopPart">—</div><div class="ksub" id="oTopPartLbl">—</div></div>
+        <div class="kpi"><div class="klbl">Top OOS category</div><div class="kval" style="font-size:15px;line-height:1.2" id="oTopCat">—</div><div class="ksub" id="oTopCatLbl">—</div></div>
+      </div>
+
+      <div class="g2" style="margin-bottom:16px">
+        <div class="card">
+          <div class="ct">OOS violations by CFR regulation part</div>
+          <div class="cs">Top 12 regulation parts — out_of_service_indicator = 'Y' · CFR = Code of Federal Regulations</div>
+          <div id="oosByPartBars" style="margin-top:6px"></div>
+          <div class="csrc">FMCSA 876r-jsdb — GROUP BY part_no WHERE out_of_service_indicator='Y' ORDER BY count DESC LIMIT 12</div>
+        </div>
+        <div class="card">
+          <div class="ct">OOS violations by violation category</div>
+          <div class="cs">insp_violation_category_id mapped to FMCSA BASIC categories</div>
+          <div class="chart-wrap" style="position:relative;height:280px"><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:55%;opacity:0.04;pointer-events:none;user-select:none;z-index:0"><svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 4465.5 788.8"> <!-- Generator: Adobe Illustrator 29.1.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 142) --> <g> <path d="M652.4,377c-14.1-8.5-33-14.7-56.6-18.4-23.6-3.7-58.7-5.6-105.4-5.6h-214c-66.1,0-109.7-7.2-130.6-21.6-21-14.4-31.4-40.8-31.4-79.2s10.7-63.9,32.2-78c21.5-14.1,63.1-21.2,125-21.2h203.2c60.8,0,100.6,6.9,119.4,20.6,18.8,13.7,28.2,40.2,28.2,79.4v9.2h71.2v-17.2c0-28.8-3.3-52.7-9.8-71.8-6.5-19.1-16.6-34.5-30.2-46.2-16.8-13.9-40-23.6-69.6-29.2-29.6-5.6-81.3-8.4-155.2-8.4h-135.2c-97.6,0-164.7,12.3-201.4,37-36.7,24.7-55,67.7-55,129s16.1,102.3,48.2,127c32.1,24.7,87.9,37,167.4,37h251.6c53.1,0,88.1,7,105.2,21,17.1,14,25.6,39.8,25.6,77.4s-12.3,75.6-36.8,91.6c-24.5,16-77.2,24-158,24h-155.6c-67.2,0-113.1-7.3-137.6-22-24.5-14.7-36.8-40.7-36.8-78s.3-12.1.8-23.6c.3-4.8.5-8.7.8-11.6H40.8c-.3,1.6-.4,3.9-.4,6.8-.8,17.9-1.2,30.5-1.2,38,0,56,17,96.1,51,120.2,34,24.1,91,36.2,171,36.2h202c92.8,0,157-13.1,192.6-39.2,35.6-26.1,53.4-72.3,53.4-138.4s-4.3-72.8-13-94.4c-8.7-21.6-23.3-38.4-43.8-50.4Z"/> <path d="M1593.5,131c-18.9-14.9-44-25.6-75-32-31.1-6.4-78-9.6-140.7-9.6h-198.9c-62.7,0-109.6,3.2-140.7,9.6-31.1,6.4-56.1,17.1-75,32-21.1,16.8-36.3,39.9-45.6,69.2-9.3,29.3-14,68.8-14,118.4v162.4c0,45.3,4.7,81.9,14.2,109.6,9.5,27.7,24.9,50.1,46.2,67.2,19.2,15.2,44,25.9,74.4,32.2,30.4,6.3,77.5,9.4,141.3,9.4h198.1c64.3,0,111.6-3.1,141.9-9.4,30.3-6.3,54.9-17,73.8-32.2,20.5-16.3,35.6-38.8,45.2-67.6,9.6-28.8,14.4-66.4,14.4-112.8v-166c0-46.1-4.8-83.7-14.4-112.6-9.6-28.9-24.7-51.5-45.2-67.8ZM1573.1,460.2v20c0,31.2-1.7,54.2-5.2,69-3.5,14.8-9.2,27.5-17.2,38.2-11.8,15.5-28,26.5-48.8,33.2-20.8,6.7-50.4,10-88.9,10h-269.4c-38.4,0-68-3.3-88.9-10-20.8-6.7-37.1-17.7-48.8-33.2-8.5-11.2-14.5-24.5-18-39.8-3.5-15.3-5.2-40.9-5.2-76.6v-156.4c0-35.7,1.7-61.3,5.2-76.6,3.5-15.3,9.5-28.6,18-39.8,11.7-15.5,28-26.5,48.8-33.2,20.8-6.7,50.4-10,88.9-10h269.4c38.4,0,68,3.3,88.9,10,20.8,6.7,37.1,17.7,48.8,33.2,8,10.7,13.7,23.3,17.2,38,3.5,14.7,5.2,37.7,5.2,69.2v154.8Z"/> <polygon points="2522.3 624.2 1983.9 96.6 1867.5 96.6 1867.5 692.2 1941.5 692.2 1941.5 156.6 2487.9 692.2 2595.9 692.2 2595.9 96.6 2522.3 96.6 2522.3 624.2"/> <path d="M4428.3,309.8v-71.6c0-54.1-15.4-91.3-46.2-111.4-30.8-20.1-93.5-30.2-188.2-30.2h-425.2v64.8h449.2c53.3,0,88.7,6.7,106.2,20,17.5,13.3,26.2,40,26.2,80v28.4c0,40.3-8.7,67-26.2,80.2-17.5,13.2-52.9,19.8-106.2,19.8h-449.2v302.4h74v-233.6h361.2c62.1,0,101.7,7.1,118.6,21.2,16.9,14.1,25.4,40.7,25.4,79.6v132.8h74v-147.6c0-34.7-8.3-61.8-24.8-81.4-16.5-19.6-41.1-31.1-73.6-34.6,39.2-8.3,66.5-20.9,81.8-38,15.3-17.1,23-44,23-80.8Z"/> <polygon points="3231.1 96.6 3132.7 96.6 2787.1 692.2 2871.5 692.2 2983.6 498.2 2983.5 498.2 3182.7 155.8 3385.1 498.2 3384.9 498.2 3499.1 692.2 3577.5 692.2 3231.1 96.6"/> </g> </svg></div><canvas id="oosCatChart"></canvas></div>
+          <div class="csrc">FMCSA 876r-jsdb — GROUP BY insp_violation_category_id WHERE out_of_service_indicator='Y'</div>
+        </div>
+      </div>
+
+      <div class="g2" style="margin-bottom:16px">
+        <div class="card">
+          <div class="ct">All violations vs. OOS — by CFR part (top 10)</div>
+          <div class="cs">Blue = all violations · Red = OOS violations · shows OOS concentration by regulation area</div>
+          <div class="chart-wrap" style="position:relative;height:260px"><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:55%;opacity:0.04;pointer-events:none;user-select:none;z-index:0"><svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 4465.5 788.8"> <!-- Generator: Adobe Illustrator 29.1.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 142) --> <g> <path d="M652.4,377c-14.1-8.5-33-14.7-56.6-18.4-23.6-3.7-58.7-5.6-105.4-5.6h-214c-66.1,0-109.7-7.2-130.6-21.6-21-14.4-31.4-40.8-31.4-79.2s10.7-63.9,32.2-78c21.5-14.1,63.1-21.2,125-21.2h203.2c60.8,0,100.6,6.9,119.4,20.6,18.8,13.7,28.2,40.2,28.2,79.4v9.2h71.2v-17.2c0-28.8-3.3-52.7-9.8-71.8-6.5-19.1-16.6-34.5-30.2-46.2-16.8-13.9-40-23.6-69.6-29.2-29.6-5.6-81.3-8.4-155.2-8.4h-135.2c-97.6,0-164.7,12.3-201.4,37-36.7,24.7-55,67.7-55,129s16.1,102.3,48.2,127c32.1,24.7,87.9,37,167.4,37h251.6c53.1,0,88.1,7,105.2,21,17.1,14,25.6,39.8,25.6,77.4s-12.3,75.6-36.8,91.6c-24.5,16-77.2,24-158,24h-155.6c-67.2,0-113.1-7.3-137.6-22-24.5-14.7-36.8-40.7-36.8-78s.3-12.1.8-23.6c.3-4.8.5-8.7.8-11.6H40.8c-.3,1.6-.4,3.9-.4,6.8-.8,17.9-1.2,30.5-1.2,38,0,56,17,96.1,51,120.2,34,24.1,91,36.2,171,36.2h202c92.8,0,157-13.1,192.6-39.2,35.6-26.1,53.4-72.3,53.4-138.4s-4.3-72.8-13-94.4c-8.7-21.6-23.3-38.4-43.8-50.4Z"/> <path d="M1593.5,131c-18.9-14.9-44-25.6-75-32-31.1-6.4-78-9.6-140.7-9.6h-198.9c-62.7,0-109.6,3.2-140.7,9.6-31.1,6.4-56.1,17.1-75,32-21.1,16.8-36.3,39.9-45.6,69.2-9.3,29.3-14,68.8-14,118.4v162.4c0,45.3,4.7,81.9,14.2,109.6,9.5,27.7,24.9,50.1,46.2,67.2,19.2,15.2,44,25.9,74.4,32.2,30.4,6.3,77.5,9.4,141.3,9.4h198.1c64.3,0,111.6-3.1,141.9-9.4,30.3-6.3,54.9-17,73.8-32.2,20.5-16.3,35.6-38.8,45.2-67.6,9.6-28.8,14.4-66.4,14.4-112.8v-166c0-46.1-4.8-83.7-14.4-112.6-9.6-28.9-24.7-51.5-45.2-67.8ZM1573.1,460.2v20c0,31.2-1.7,54.2-5.2,69-3.5,14.8-9.2,27.5-17.2,38.2-11.8,15.5-28,26.5-48.8,33.2-20.8,6.7-50.4,10-88.9,10h-269.4c-38.4,0-68-3.3-88.9-10-20.8-6.7-37.1-17.7-48.8-33.2-8.5-11.2-14.5-24.5-18-39.8-3.5-15.3-5.2-40.9-5.2-76.6v-156.4c0-35.7,1.7-61.3,5.2-76.6,3.5-15.3,9.5-28.6,18-39.8,11.7-15.5,28-26.5,48.8-33.2,20.8-6.7,50.4-10,88.9-10h269.4c38.4,0,68,3.3,88.9,10,20.8,6.7,37.1,17.7,48.8,33.2,8,10.7,13.7,23.3,17.2,38,3.5,14.7,5.2,37.7,5.2,69.2v154.8Z"/> <polygon points="2522.3 624.2 1983.9 96.6 1867.5 96.6 1867.5 692.2 1941.5 692.2 1941.5 156.6 2487.9 692.2 2595.9 692.2 2595.9 96.6 2522.3 96.6 2522.3 624.2"/> <path d="M4428.3,309.8v-71.6c0-54.1-15.4-91.3-46.2-111.4-30.8-20.1-93.5-30.2-188.2-30.2h-425.2v64.8h449.2c53.3,0,88.7,6.7,106.2,20,17.5,13.3,26.2,40,26.2,80v28.4c0,40.3-8.7,67-26.2,80.2-17.5,13.2-52.9,19.8-106.2,19.8h-449.2v302.4h74v-233.6h361.2c62.1,0,101.7,7.1,118.6,21.2,16.9,14.1,25.4,40.7,25.4,79.6v132.8h74v-147.6c0-34.7-8.3-61.8-24.8-81.4-16.5-19.6-41.1-31.1-73.6-34.6,39.2-8.3,66.5-20.9,81.8-38,15.3-17.1,23-44,23-80.8Z"/> <polygon points="3231.1 96.6 3132.7 96.6 2787.1 692.2 2871.5 692.2 2983.6 498.2 2983.5 498.2 3182.7 155.8 3385.1 498.2 3384.9 498.2 3499.1 692.2 3577.5 692.2 3231.1 96.6"/> </g> </svg></div><canvas id="oosCompareChart"></canvas></div>
+          <div class="csrc">FMCSA 876r-jsdb — part_no all violations vs OOS violations</div>
+        </div>
+        <div class="card">
+          <div class="ct">Recent OOS violations — live records</div>
+          <div class="cs">30 most recent individual OOS violations — out_of_service_indicator = 'Y'</div>
+          <table class="tbl">
+            <thead><tr>
+              <th>Insp. ID</th><th>CFR Part / Regulation area</th><th>Section</th><th>Category</th><th>Status</th><th>Defect</th>
+            </tr></thead>
+            <tbody id="oosTable"></tbody>
+          </table>
+          <div class="csrc">FMCSA 876r-jsdb — WHERE out_of_service_indicator='Y' ORDER BY inspection_id DESC LIMIT 30</div>
+        </div>
+      </div>
+
   </div>
 
 </div><!-- /main -->
@@ -651,6 +697,22 @@ async function fetchAll(){
 
     setTabStatus('inspect','ready');
     renderInspect();
+
+    // ── OOS VIOLATIONS (876r-jsdb) ────────────────────────────────────────
+    setMsg('Loading OOS violation breakdown...');
+    const VIOL = 'https://data.transportation.gov/resource/876r-jsdb.json';
+    const [oosTotal,oosAllTotal,oosByPart,oosByPartAll,oosByCat,oosRecent] = await Promise.all([
+      q(VIOL,{'$select':'COUNT(*) AS cnt','$where':"out_of_service_indicator='Y'"}).then(r=>+r[0]?.cnt||0).catch(()=>0),
+      q(VIOL,{'$select':'COUNT(*) AS cnt'}).then(r=>+r[0]?.cnt||0).catch(()=>0),
+      q(VIOL,{'$select':'part_no,COUNT(*) AS cnt','$where':"out_of_service_indicator='Y'",'$group':'part_no','$order':'cnt DESC','$limit':'12'}).then(r=>r).catch(()=>[]),
+      q(VIOL,{'$select':'part_no,COUNT(*) AS cnt','$group':'part_no','$order':'cnt DESC','$limit':'12'}).then(r=>r).catch(()=>[]),
+      q(VIOL,{'$select':'insp_violation_category_id,COUNT(*) AS cnt','$where':"out_of_service_indicator='Y'",'$group':'insp_violation_category_id','$order':'cnt DESC','$limit':'12'}).then(r=>r).catch(()=>[]),
+      q(VIOL,{'$select':'inspection_id,part_no,part_no_section,insp_violation_category_id,out_of_service_indicator,defect_verification_id','$where':"out_of_service_indicator='Y'",'$order':'inspection_id DESC','$limit':'30'}).then(r=>r).catch(()=>[]),
+    ]);
+    RAW.oosTotal=oosTotal; RAW.oosAllTotal=oosAllTotal;
+    RAW.oosByPart=oosByPart; RAW.oosByPartAll=oosByPartAll;
+    RAW.oosByCat=oosByCat; RAW.oosRecent=oosRecent;
+    renderOOS();
 
     document.getElementById('ts').textContent='Updated '+new Date().toLocaleTimeString();
     document.getElementById('ft').textContent=new Date().toLocaleString();
@@ -921,6 +983,87 @@ function switchTab(id,btn){
   document.querySelectorAll('.tablink').forEach(b=>b.classList.remove('active'));
   document.getElementById('tab-'+id).classList.add('active');
   btn.classList.add('active');
+}
+
+
+function renderOOS(){
+  const CFR={'390':'Federal Safety Regs','391':'Driver Qualifications',
+    '392':'Driving of CMVs','393':'Parts & Accessories (Brakes/Lights/Tires)',
+    '395':'Hours of Service','396':'Inspection & Maintenance',
+    '397':'HazMat Transportation','172':'HazMat Communication',
+    '173':'HazMat Packaging','177':'HazMat by Highway',
+    '382':'Drug & Alcohol Testing','383':'CDL Standards',
+    '385':'Safety Fitness','386':'Enforcement Procedures',
+    '302':'HazMat General Regs','999':'Other/Unknown'};
+
+  const CATS={'16':'Unsafe Driving','20':'Hours of Service',
+    '23':'Vehicle Maintenance','25':'Hazardous Materials',
+    '15':'Driver Fitness','30':'Controlled Substances/Alcohol',
+    '51':'Cargo-Related','14':'Lights/Electrical','8':'Brakes',
+    '24':'Tires','21':'Fatigued Driving','22':'Driver Qualifications'};
+
+  const DEFECT={'1':'Verified','2':'Not Verified','3':'N/A','4':'Corrected on Site','99':'Unknown'};
+
+  const tot=RAW.oosTotal||0, allTot=RAW.oosAllTotal||1;
+  document.getElementById('oTot').textContent=tot.toLocaleString();
+  document.getElementById('oRate').textContent=((tot/allTot)*100).toFixed(1)+'%';
+
+  const topPart=(RAW.oosByPart||[])[0];
+  const topCat=(RAW.oosByCat||[])[0];
+  if(topPart){
+    document.getElementById('oTopPart').textContent='Part '+topPart.part_no;
+    document.getElementById('oTopPartLbl').textContent=CFR[topPart.part_no]||'CFR Part '+topPart.part_no;
+  }
+  if(topCat){
+    document.getElementById('oTopCat').textContent='Cat '+topCat.insp_violation_category_id;
+    document.getElementById('oTopCatLbl').textContent=CATS[topCat.insp_violation_category_id]||'Category '+topCat.insp_violation_category_id;
+  }
+
+  // OOS by CFR Part bars
+  const partMax=+((RAW.oosByPart||[])[0]?.cnt||1);
+  document.getElementById('oosByPartBars').innerHTML=(RAW.oosByPart||[]).map((r,i)=>{
+    const v=+r.cnt||0, lbl=CFR[r.part_no]||'Part '+r.part_no;
+    return `<div class="brow">
+      <div class="blbl" title="${lbl}" style="min-width:200px">${lbl}</div>
+      <div class="bbg"><div class="bfill" style="width:${(v/partMax*100).toFixed(0)}%;background:${COLORS[i%COLORS.length]}"></div></div>
+      <div class="bpct">${v>=1000?(v/1000).toFixed(0)+'K':v}</div></div>`;
+  }).join('');
+
+  // OOS by category donut
+  const catData=(RAW.oosByCat||[]).slice(0,8).map(r=>({
+    label:CATS[r.insp_violation_category_id]||'Cat '+r.insp_violation_category_id,cnt:+r.cnt||0}));
+  mk('oosCatChart',{type:'doughnut',data:{
+    labels:catData.map(r=>r.label),
+    datasets:[{data:catData.map(r=>r.cnt),
+      backgroundColor:['#e05555','#e87c3a','#d4a017','#3d8ef0','#3db87a','#a78bfa','#f472b6','#5a6a85'],
+      borderColor:'#111620',borderWidth:2}]},
+    options:{...CO,cutout:'50%',plugins:{legend:{display:true,position:'right',
+      labels:{color:'#7a8fa8',font:{size:10,family:'IBM Plex Mono'},boxWidth:9,padding:6}}}}});
+
+  // All vs OOS compare bar chart
+  const partAllMap={};(RAW.oosByPartAll||[]).forEach(r=>{partAllMap[r.part_no]=+r.cnt||0});
+  const compareKeys=(RAW.oosByPart||[]).slice(0,10).map(r=>r.part_no);
+  const compareLabels=compareKeys.map(k=>{const l=CFR[k]||'Part '+k;return l.length>20?l.slice(0,19)+'…':l});
+  mk('oosCompareChart',{type:'bar',data:{
+    labels:compareLabels,
+    datasets:[
+      {label:'All violations',data:compareKeys.map(k=>partAllMap[k]||0),backgroundColor:'rgba(61,142,240,0.3)',borderRadius:2},
+      {label:'OOS violations',data:compareKeys.map(k=>+((RAW.oosByPart||[]).find(r=>r.part_no===k)?.cnt||0)),backgroundColor:'rgba(224,85,85,0.75)',borderRadius:2},
+    ]},
+    options:{...CO,scales:{
+      x:{grid:{display:false},ticks:{...TS,maxRotation:40,font:{size:9,family:'IBM Plex Mono'}}},
+      y:{grid:GY,ticks:{...TS,callback:v=>v>=1000?(v/1000).toFixed(0)+'K':v}}},
+    plugins:{legend:{display:true,position:'top',labels:{color:'#7a8fa8',font:{size:10,family:'IBM Plex Mono'},boxWidth:9,padding:8}}}}});
+
+  // Recent OOS table
+  document.getElementById('oosTable').innerHTML=(RAW.oosRecent||[]).map(r=>`<tr>
+    <td style="font-family:var(--mono);font-size:10px;color:var(--mu)">${r.inspection_id||'—'}</td>
+    <td style="font-size:11px;font-weight:500">${CFR[r.part_no]||'Part '+r.part_no}</td>
+    <td style="font-family:var(--mono);font-size:10px;color:var(--mu2)">${r.part_no_section||'—'}</td>
+    <td style="font-size:11px;color:var(--mu2)">${CATS[r.insp_violation_category_id]||'Cat '+r.insp_violation_category_id}</td>
+    <td><span class="pill p-haz">OOS</span></td>
+    <td style="font-family:var(--mono);font-size:10px;color:var(--mu)">${DEFECT[r.defect_verification_id]||r.defect_verification_id||'—'}</td>
+  </tr>`).join('');
 }
 
 function reload(){fetchAll()}
